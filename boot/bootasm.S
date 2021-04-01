@@ -1,4 +1,7 @@
+# 从库环境变量中导入 asm.h 文件的内容；
 #include <asm.h>
+
+# 操作系统加载到内存中的第一个程序入口；
 
 # 启动 CPU：切换到 32 位保护模式，跳转到 C 程序中；
 # BIOS 从硬盘的第一个块，物理内存地址为 0x7C00 的位置，以实模式 %cs = 0 %ip = 7c00 开始执行；
@@ -10,25 +13,27 @@
 # 实模式的起始地址为 0:7c00，为 bootloader 的起始地址；
 .globl start
 start:
-.code16                                             # Assemble for 16-bit mode
-    cli                                             # Disable interrupts
+.code16                                             # 指定为 16 位模式；
+    cli                                             # 失能中断；
     cld                                             # String operations increment
 
-    # Set up the important data segment registers (DS, ES, SS).
+    # 关注点 1：
+    # 设置重要的数据段寄存器：DS、ES、SS；
     xorw %ax, %ax                                   # Segment number zero
     movw %ax, %ds                                   # -> Data Segment
     movw %ax, %es                                   # -> Extra Segment
     movw %ax, %ss                                   # -> Stack Segment
 
-    # Enable A20:
+    # 关注点 2：
+    # 使能 A20 地址线；
     #  For backwards compatibility with the earliest PCs, physical
     #  address line 20 is tied low, so that addresses higher than
     #  1MB wrap around to zero by default. This code undoes this.
 
 seta20.1:
     inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
-    testb $0x2, %al                                 # 如果 %al 第低2位为1，则ZF = 0, 则跳转
-    jnz seta20.1                                    # 如果 %al 第低2位为0，则ZF = 1, 则不跳转
+    testb $0x2, %al                                 # 如果 %al 第低 2 位为 1，则 ZF = 0, 则跳转；
+    jnz seta20.1                                    # 如果 %al 第低 2 位为 0，则 ZF = 1, 则不跳转；
 
     movb $0xd1, %al                                 # 0xd1 -> port 0x64
     outb %al, $0x64                                 # 0xd1 means: write data to 8042's P2 port
@@ -41,10 +46,11 @@ seta20.2:
     movb $0xdf, %al                                 # 0xdf -> port 0x60
     outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
 
-    # 全局描述符表：存放8字节的段描述符，段描述符包含段的属性。
-    # 段选择符：总共16位，高13位用作全局描述符表中的索引位，GDT的第一项总是设为0，
-    #   因此孔断选择符的逻辑地址会被认为是无效的，从而引起一个处理器异常。GDT表项
-    #   最大数目是8191个，即2^13 - 1.
+    # 关注点 3：
+    # 全局描述符表：存放 8 字节的段描述符，段描述符包含段的属性。
+    # 段选择符   ：总共 16 位，高 13 位用作全局描述符表中的索引位，GDT 的第一项总是设为 0，
+    #               因此孔断选择符的逻辑地址会被认为是无效的，从而引起一个处理器异常；
+    #               GDT 表项最大数目是 8191 个，即 2^13 - 1；
     # Switch from real to protected mode, using a bootstrap GDT
     # and segment translation that makes virtual addresses
     # identical to physical addresses, so that the

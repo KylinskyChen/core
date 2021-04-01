@@ -138,7 +138,7 @@ $(call finish_all)
 
 .PHONY: test qemu
 
-test: $(UCOREIMG)
+test: $(bootblock)
 	$(info finished)
 
 qemu: $(UCOREIMG)

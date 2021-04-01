@@ -5,7 +5,7 @@
 
 #define ELF_MAGIC    0x464C457FU            // "\x7FELF" in little endian
 
-/* file header */
+// 文件头部；
 struct elfhdr {
     uint32_t e_magic;     // 必须等于 ELF_MAGIC；
     uint8_t e_elf[12];
@@ -19,9 +19,9 @@ struct elfhdr {
     uint16_t e_ehsize;    // 当前这个 ELF 头部文件的大小；
     uint16_t e_phentsize; // 程序头部里入口的大小；
     uint16_t e_phnum;     // 程序头部里入口的数量，或者为 0；
-    uint16_t e_shentsize; // 段头部里入口的大小；
-    uint16_t e_shnum;     // 段头部里入口的数量，或者为 0；
-    uint16_t e_shstrndx;  // 包含段名称字符串的段编号； 
+    uint16_t e_shentsize; // 块头部里入口的大小；
+    uint16_t e_shnum;     // 块头部里入口的数量，或者为 0；
+    uint16_t e_shstrndx;  // 包含段名称字符串的块编号； 
 };
 
 // {
@@ -42,17 +42,28 @@ struct elfhdr {
 //     e_shstrndx = 8
 // }
 
-/* program section header */
+// 程序段头部；
 struct proghdr {
-    uint32_t p_type;   // loadable code or data, dynamic linking info,etc.
-    uint32_t p_offset; // file offset of segment
-    uint32_t p_va;     // virtual address to map segment
-    uint32_t p_pa;     // physical address, not used
-    uint32_t p_filesz; // size of segment in file
-    uint32_t p_memsz;  // size of segment in memory (bigger if contains bss）
-    uint32_t p_flags;  // read/write/execute bits
-    uint32_t p_align;  // required alignment, invariably hardware page size
+    uint32_t p_type;   // 可加载的代码或数据，动态链接信息等；
+    uint32_t p_offset; // 段文件偏移地址；
+    uint32_t p_va;     // 指向映射段的虚拟地址；
+    uint32_t p_pa;     // 物理地址，该信息不再使用；
+    uint32_t p_filesz; // 文件中段的大小；
+    uint32_t p_memsz;  // 内存中段的大小 (bigger if contains bss）；
+    uint32_t p_flags;  // 读、写、可执行位；
+    uint32_t p_align;  // 需要对齐，硬件页面大小不变；
 };
+
+// {
+//     p_type = 1, 
+//     p_offset = 4096,     // 0x1000
+//     p_va = 1048576,      // 0x100000
+//     p_pa = 1048576,      // 0x100000
+//     p_filesz = 54953,    // 0xD6A9
+//     p_memsz = 54953,     // 0xD6A9
+//     p_flags = 5,         // 0x5
+//     p_align = 4096       // 0x1000
+// }
 
 #endif /* !__LIBS_ELF_H__ */
 

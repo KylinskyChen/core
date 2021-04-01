@@ -6,16 +6,17 @@ Disassembly of section .text:
 
 00007c00 <start>:
 
-# start address should be 0:7c00, in real mode, the beginning address of the running bootloader
+# 实模式的起始地址为 0:7c00，为 bootloader 的起始地址；
 .globl start
 start:
-.code16                                             # Assemble for 16-bit mode
-    cli                                             # Disable interrupts
+.code16                                             # 指定为 16 位模式；
+    cli                                             # 失能中断；
     7c00:	fa                   	cli    
     cld                                             # String operations increment
     7c01:	fc                   	cld    
 
-    # Set up the important data segment registers (DS, ES, SS).
+    # 关注点 1：
+    # 设置重要的数据段寄存器：DS、ES、SS；
     xorw %ax, %ax                                   # Segment number zero
     7c02:	31 c0                	xor    %eax,%eax
     movw %ax, %ds                                   # -> Data Segment
@@ -33,9 +34,9 @@ start:
 seta20.1:
     inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
     7c0a:	e4 64                	in     $0x64,%al
-    testb $0x2, %al                                 # 如果 %al 第低2位为1，则ZF = 0, 则跳转
+    testb $0x2, %al                                 # 如果 %al 第低 2 位为 1，则 ZF = 0, 则跳转；
     7c0c:	a8 02                	test   $0x2,%al
-    jnz seta20.1                                    # 如果 %al 第低2位为0，则ZF = 1, 则不跳转
+    jnz seta20.1                                    # 如果 %al 第低 2 位为 0，则 ZF = 1, 则不跳转；
     7c0e:	75 fa                	jne    7c0a <seta20.1>
 
     movb $0xd1, %al                                 # 0xd1 -> port 0x64
@@ -57,7 +58,7 @@ seta20.2:
     7c1a:	b0 df                	mov    $0xdf,%al
     outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
     7c1c:	e6 60                	out    %al,$0x60
-    #   最大数目是8191个，即2^13 - 1.
+    #               GDT 表项最大数目是 8191 个，即 2^13 - 1；
     # Switch from real to protected mode, using a bootstrap GDT
     # and segment translation that makes virtual addresses
     # identical to physical addresses, so that the
@@ -97,7 +98,7 @@ protcseg:
     movw %ax, %ss                                   # -> SS: Stack Segment
     7c3e:	8e d0                	mov    %eax,%ss
 
-    # Set up the stack pointer and call into C. The stack region is from 0--start(0x7c00)
+    # 设置堆栈指针并调用 C 中的程序，堆栈区域从 0 到 start (0x7C00)；
     movl $0x0, %ebp
     7c40:	bd 00 00 00 00       	mov    $0x0,%ebp
     movl $start, %esp
@@ -107,7 +108,7 @@ protcseg:
 
 00007c4f <spin>:
 
-    # If bootmain returns (it shouldn't), loop.
+    # bootmain 返回的地方，实际上不会执行到这里，若执行到此处则循环；
 spin:
     jmp spin
     7c4f:	eb fe                	jmp    7c4f <spin>
@@ -249,7 +250,7 @@ outb(uint16_t port, uint8_t data) {
 void
 bootmain(void) {
     7d0d:	55                   	push   %ebp
-    // read the 1st page off disk
+    // 读取磁盘的第一页；
     readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
     7d0e:	31 c9                	xor    %ecx,%ecx
     7d10:	ba 00 10 00 00       	mov    $0x1000,%edx
@@ -261,7 +262,8 @@ bootmain(void) {
     readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
     7d1e:	e8 4f ff ff ff       	call   7c72 <readseg>
 
-    // is this a valid ELF?
+    // 检查 ELF 的有效性；
+    // 第一页上的 ELFHDR->e_magic 数值必须等于 ELF_MAGIC 0x464C457FU；
     if (ELFHDR->e_magic != ELF_MAGIC) {
     7d23:	81 3d 00 00 01 00 7f 	cmpl   $0x464c457f,0x10000
     7d2a:	45 4c 46 
@@ -270,7 +272,7 @@ bootmain(void) {
 
     struct proghdr *ph, *eph;
 
-    // load each program segment (ignores ph flags)
+    // 加载每个程序段（忽略 ph 标志）；
     ph = (struct proghdr *)((uintptr_t)ELFHDR + ELFHDR->e_phoff);
     7d2f:	a1 1c 00 01 00       	mov    0x1001c,%eax
     eph = ph + ELFHDR->e_phnum;
@@ -280,6 +282,7 @@ bootmain(void) {
     eph = ph + ELFHDR->e_phnum;
     7d41:	c1 e6 05             	shl    $0x5,%esi
     7d44:	01 de                	add    %ebx,%esi
+
     for (; ph < eph; ph ++) {
     7d46:	39 f3                	cmp    %esi,%ebx
     7d48:	73 18                	jae    7d62 <bootmain+0x55>
@@ -295,8 +298,8 @@ bootmain(void) {
     7d60:	eb e4                	jmp    7d46 <bootmain+0x39>
     }
 
-    // call the entry point from the ELF header
-    // note: does not return
+    // 从 ELF 的头部调用起始点的函数；
+    // 运行之后不再返回；
     ((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();
     7d62:	a1 18 00 01 00       	mov    0x10018,%eax
     7d67:	25 ff ff ff 00       	and    $0xffffff,%eax

@@ -108,8 +108,6 @@ bootmain(void) {
     // 运行之后不再返回；
     ((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();
 
-    
-
 bad:
     outw(0x8A00, 0x8A00);
     outw(0x8A00, 0x8E00);
