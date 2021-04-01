@@ -85,32 +85,36 @@ readseg(uintptr_t va, uint32_t count, uint32_t offset) {
 /* bootmain - the entry of bootloader */
 void
 bootmain(void) {
-    // read the 1st page off disk
+    // 读取磁盘的第一页；
     readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
 
-    // is this a valid ELF?
+    // 检查 ELF 的有效性；
+    // 第一页上的 ELFHDR->e_magic 数值必须等于 ELF_MAGIC 0x464C457FU；
     if (ELFHDR->e_magic != ELF_MAGIC) {
         goto bad;
     }
 
     struct proghdr *ph, *eph;
 
-    // load each program segment (ignores ph flags)
+    // 加载每个程序段（忽略 ph 标志）；
     ph = (struct proghdr *)((uintptr_t)ELFHDR + ELFHDR->e_phoff);
     eph = ph + ELFHDR->e_phnum;
+
     for (; ph < eph; ph ++) {
         readseg(ph->p_va & 0xFFFFFF, ph->p_memsz, ph->p_offset);
     }
 
-    // call the entry point from the ELF header
-    // note: does not return
+    // 从 ELF 的头部调用起始点的函数；
+    // 运行之后不再返回；
     ((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();
+
+    
 
 bad:
     outw(0x8A00, 0x8A00);
     outw(0x8A00, 0x8E00);
 
-    /* do nothing */
+    // 空循环，将程序阻塞在这里；
     while (1);
 }
 

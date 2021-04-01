@@ -1,15 +1,13 @@
 #include <asm.h>
 
-# Start the CPU: switch to 32-bit protected mode, jump into C.
-# The BIOS loads this code from the first sector of the hard disk into
-# memory at physical address 0x7c00 and starts executing in real mode
-# with %cs=0 %ip=7c00.
+# 启动 CPU：切换到 32 位保护模式，跳转到 C 程序中；
+# BIOS 从硬盘的第一个块，物理内存地址为 0x7C00 的位置，以实模式 %cs = 0 %ip = 7c00 开始执行；
 
-.set PROT_MODE_CSEG,        0x8                     # kernel code segment selector
-.set PROT_MODE_DSEG,        0x10                    # kernel data segment selector
-.set CR0_PE_ON,             0x1                     # protected mode enable flag
+.set PROT_MODE_CSEG,        0x8                     # 内核代码段选择器；
+.set PROT_MODE_DSEG,        0x10                    # 内核数据段选择器；
+.set CR0_PE_ON,             0x1                     # 保护模式使能标识；
 
-# start address should be 0:7c00, in real mode, the beginning address of the running bootloader
+# 实模式的起始地址为 0:7c00，为 bootloader 的起始地址；
 .globl start
 start:
 .code16                                             # Assemble for 16-bit mode
@@ -70,17 +68,17 @@ protcseg:
     movw %ax, %gs                                   # -> GS
     movw %ax, %ss                                   # -> SS: Stack Segment
 
-    # Set up the stack pointer and call into C. The stack region is from 0--start(0x7c00)
+    # 设置堆栈指针并调用 C 中的程序，堆栈区域从 0 到 start (0x7C00)；
     movl $0x0, %ebp
     movl $start, %esp
     call bootmain
 
-    # If bootmain returns (it shouldn't), loop.
+    # bootmain 返回的地方，实际上不会执行到这里，若执行到此处则循环；
 spin:
     jmp spin
 
 # Bootstrap GDT
-.p2align 2                                          # force 4 byte alignment
+.p2align 2                                          # 强制 4 字节对齐；
 gdt:
     SEG_NULLASM                                     # null seg
     SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel

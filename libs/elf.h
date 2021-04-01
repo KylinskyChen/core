@@ -7,22 +7,40 @@
 
 /* file header */
 struct elfhdr {
-    uint32_t e_magic;     // must equal ELF_MAGIC
+    uint32_t e_magic;     // 必须等于 ELF_MAGIC；
     uint8_t e_elf[12];
-    uint16_t e_type;      // 1=relocatable, 2=executable, 3=shared object, 4=core image
-    uint16_t e_machine;   // 3=x86, 4=68K, etc.
-    uint32_t e_version;   // file version, always 1
-    uint32_t e_entry;     // entry point if executable
-    uint32_t e_phoff;     // file position of program header or 0
-    uint32_t e_shoff;     // file position of section header or 0
-    uint32_t e_flags;     // architecture-specific flags, usually 0
-    uint16_t e_ehsize;    // size of this elf header
-    uint16_t e_phentsize; // size of an entry in program header
-    uint16_t e_phnum;     // number of entries in program header or 0
-    uint16_t e_shentsize; // size of an entry in section header
-    uint16_t e_shnum;     // number of entries in section header or 0
-    uint16_t e_shstrndx;  // section number that contains section name strings
+    uint16_t e_type;      // 1 = 可重定位, 2 = 可执行, 3 = 共享对象, 4 = 内核镜像
+    uint16_t e_machine;   // 3 = x86, 4 = 68K, etc.
+    uint32_t e_version;   // 文件版本，总为 1；
+    uint32_t e_entry;     // 可执行程序的入口地址；
+    uint32_t e_phoff;     // 程序头部的位置，或者为 0；
+    uint32_t e_shoff;     // 段头部的位置，或者为 0；
+    uint32_t e_flags;     // 特殊架构的标志位，一般为 0；
+    uint16_t e_ehsize;    // 当前这个 ELF 头部文件的大小；
+    uint16_t e_phentsize; // 程序头部里入口的大小；
+    uint16_t e_phnum;     // 程序头部里入口的数量，或者为 0；
+    uint16_t e_shentsize; // 段头部里入口的大小；
+    uint16_t e_shnum;     // 段头部里入口的数量，或者为 0；
+    uint16_t e_shstrndx;  // 包含段名称字符串的段编号； 
 };
+
+// {
+//     e_magic = 1179403647,    // 0x464C457F
+//     e_elf = "\001\001\001\000\000\000\000\000\000\000\000", 
+//     e_type = 2, 
+//     e_machine = 3,
+//     e_version = 1, 
+//     e_entry = 1048576,       // 0x100000
+//     e_phoff = 52,            // 0x34
+//     e_shoff = 64136,         // 0xFA88
+//     e_flags = 0, 
+//     e_ehsize = 52,           // 0x34
+//     e_phentsize = 32,        // 0x20
+//     e_phnum = 3, 
+//     e_shentsize = 40,        // 0x28
+//     e_shnum = 11, 
+//     e_shstrndx = 8
+// }
 
 /* program section header */
 struct proghdr {
