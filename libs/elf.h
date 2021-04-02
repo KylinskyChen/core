@@ -19,9 +19,9 @@ struct elfhdr {
     uint16_t e_ehsize;    // 当前这个 ELF 头部文件的大小；
     uint16_t e_phentsize; // 程序头部里入口的大小；
     uint16_t e_phnum;     // 程序头部里入口的数量，或者为 0；
-    uint16_t e_shentsize; // 块头部里入口的大小；
-    uint16_t e_shnum;     // 块头部里入口的数量，或者为 0；
-    uint16_t e_shstrndx;  // 包含段名称字符串的块编号； 
+    uint16_t e_shentsize; // 节区头部里入口的大小；
+    uint16_t e_shnum;     // 节区头部里入口的数量，或者为 0；
+    uint16_t e_shstrndx;  // 包含段名称字符串的节区编号； 
 };
 
 // {
@@ -44,12 +44,12 @@ struct elfhdr {
 
 // 程序段头部；
 struct proghdr {
-    uint32_t p_type;   // 可加载的代码或数据，动态链接信息等；
-    uint32_t p_offset; // 段文件偏移地址；
-    uint32_t p_va;     // 指向映射段的虚拟地址；
+    uint32_t p_type;   // 可加载的代码或数据，动态链接信息等；（段类型；）
+    uint32_t p_offset; // 段文件偏移地址；（段相对文件头的偏移值；）
+    uint32_t p_va;     // 指向映射段的虚拟地址；（段的第一个字节将被放到内存中的虚拟地址；）
     uint32_t p_pa;     // 物理地址，该信息不再使用；
     uint32_t p_filesz; // 文件中段的大小；
-    uint32_t p_memsz;  // 内存中段的大小 (bigger if contains bss）；
+    uint32_t p_memsz;  // 内存中段的大小 (bigger if contains bss）；（段在内存映像中占用的字节数；）
     uint32_t p_flags;  // 读、写、可执行位；
     uint32_t p_align;  // 需要对齐，硬件页面大小不变；
 };

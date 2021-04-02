@@ -7,9 +7,10 @@
 4. 第 4 问：上电之后，如何一步步启动了机器？
 5. 第 5 问：为什么不利用 BIOS 直接加载操作系统？
 6. 第 6 问：bootloader 的实现中需要关注哪些硬件知识？
-7. 第 7 问：bootblock 是怎样实现的？
+7. 第 7 问：bootloader 是怎么实现的？
+9. 第 8 问：kernel 是如何实现的？
 
-# 二、qemu
+# 二、环境
 
 在系统上安装 qemu。
 
@@ -120,6 +121,23 @@ dd if=kernel of=ucore.img seek=1 conv=notrunc
 ```
 
 ## 2.3 生成 bootblock
+
+[操作系统ucore lab1笔记](https://www.yht7.com/news/101595)
+
+- 当 CPU 刚加电初始化时，CS:IP 寄存器根据设定的初始值跳转到 BIOS 固件处执行第一条指令；
+- 根据指令跳转到 BIOS 数据区执行 BIOS 代码；
+- BIOS 在完成硬件的自检后，会将操作系统的启动代码加载到内存；
+- 此时 CPU 还处于实模式，只能寻址20位，也就是1MB的内存空间（通常处于内存空间的低位地址）；
+- 所以操作系统的启动代码需要加载在这 1MB 的寻址空间内；
+
+- 实验环境下，启动代码需加载到内存地址 0x7C00处；
+- 启动代码再将 CPU 从实模式转成保护模式，得以获得 32 位的寻址空间（4GB），去加载代码量庞大的操作系统。
+
+bootblock 完成了 `主引导记录`、`活动分区文件系统识别`、`加载程序` 的功能。
+
+bootblock 主要涉及到的源文件有 `bootmain.c`、`bootasm.S`、`sign.c`。
+
+- sign.c：将生成的可执行文件 `bootblock.out` 拷贝重命名为 `bootblock`，文件结尾加入主引导记录标志 `0x55`、`0xAA`，控制拷贝完的文件大小为 `512` 字节。
 
 生成 bootblock 的 makefile 如下。
 
@@ -337,6 +355,15 @@ bootloader 完成的工作包括：
 - 显示字符串信息；
 - 把控制权交给 ucore 操作系统。
 
+### 2.4.3 操作系统启动过程
+
+当 bootloader 通过读取硬盘扇区把 ucore 在系统加载到内存后，就转跳到 ucore 操作系统在内存中的入口位置（`kern/init.c` 中的 `kern_init` 函数的起始地址），这样 `ucore` 就接管了整个控制权。
+
+
+
+
+
+
 ## 2.5 Intel 80386 相关的硬件知识
 
 ### 2.5.1 保护模式
@@ -538,32 +565,200 @@ EFLAGS 和 8086 的 16 位标志寄存器相比，增加了 4 个控制位。
 
 还有一些应用程序无法访问的控制寄存器，如 CR0、CR2、CR3 等，后面学到了再补充。
 
+### 2.5.4 地址空间
 
+### 2.5.5 硬盘访问
 
+### 2.5.6 ELF 文件格式
 
+ELF (Executable and linking format) 文件格式是 Linux 系统下的一种常用目标文件 (object file) 格式。
 
+有 3 种主要类型。
 
+1. 用于执行的可执行文件 (executable file)；
+    - 用于提供程序的进程映像，加载的内存执行；
+2. 用于连接的可重定位文件 (relocatable file)；
+    - 可与其它目标文件一起创建可执行文件和共享目标文件；
+3. 共享目标文件 (shared object file)；
+    - 连接器可将它与其它可重定位文件和共享目标文件连接成其它的目标文件；
+    - 动态连接器又可将它与可执行文件和其它共享目标文件结合起来创建一个进程映像。
 
-## bootblock 的实现
+这里重点关注与 ucore 相关的用于可执行文件的 ELF 可执行文件类型。
 
-[操作系统ucore lab1笔记](https://www.yht7.com/news/101595)
+ELF header 在文件开始处描述了整个文件的组织。
 
-- 当 CPU 刚加电初始化时，CS:IP 寄存器根据设定的初始值跳转到 BIOS 固件处执行第一条指令；
-- 根据指令跳转到 BIOS 数据区执行 BIOS 代码；
-- BIOS 在完成硬件的自检后，会将操作系统的启动代码加载到内存；
-- 此时 CPU 还处于实模式，只能寻址20位，也就是1MB的内存空间（通常处于内存空间的低位地址）；
-- 所以操作系统的启动代码需要加载在这 1MB 的寻址空间内；
+ELF 的文件头包含整个执行文件的控制结构，其定义在 `elf.h` 中。
 
-- 实验环境下，启动代码需加载到内存地址 0x7C00处；
-- 启动代码再将 CPU 从实模式转成保护模式，得以获得 32 位的寻址空间（4GB），去加载代码量庞大的操作系统。
+```c
+struct elfhdr {
+    uint32_t e_magic;     // 必须等于 ELF_MAGIC；
+    uint8_t e_elf[12];
+    uint16_t e_type;      // 1 = 可重定位, 2 = 可执行, 3 = 共享对象, 4 = 内核镜像
+    uint16_t e_machine;   // 3 = x86, 4 = 68K, etc.
+    uint32_t e_version;   // 文件版本，总为 1；
+    uint32_t e_entry;     // 可执行程序的入口地址；
+    uint32_t e_phoff;     // 程序头部的位置，或者为 0；（program header 表的位置偏移；）
+    uint32_t e_shoff;     // 段头部的位置，或者为 0；
+    uint32_t e_flags;     // 特殊架构的标志位，一般为 0；
+    uint16_t e_ehsize;    // 当前这个 ELF 头部文件的大小；
+    uint16_t e_phentsize; // 程序头部里入口的大小；
+    uint16_t e_phnum;     // 程序头部里入口的数量，或者为 0；（program header 表中的入口数目；）
+    uint16_t e_shentsize; // 节区头部里入口的大小；
+    uint16_t e_shnum;     // 节区头部里入口的数量，或者为 0；
+    uint16_t e_shstrndx;  // 包含段名称字符串的节区编号； 
+};
+```
 
-bootblock 完成了 `主引导记录`、`活动分区文件系统识别`、`加载程序` 的功能。
+`program header` 描述与程序执行直接相关的目标文件结构信息，用来在文件中定位各个段的映像，同时包含其他一些用来为程序创建进程映像所必需的信息。
 
-bootblock 主要涉及到的源文件有 `bootmain.c`、`bootasm.S`、`sign.c`。
+可执行文件的程序头部是一个 `program header` 结构的数组， 每个结构描述了一个段或者系统准备程序执行所必需的其它信息。
 
-- sign.c：将生成的可执行文件 `bootblock.out` 拷贝重命名为 `bootblock`，文件结尾加入主引导记录标志 `0x55`、`0xAA`，控制拷贝完的文件大小为 `512` 字节。
+目标文件的 `段` 包含一个或者多个 `节区`（section） ，也就是 `段内容`（Segment Contents）。
 
-## 为什么不利用 BIOS 直接加载操作系统？
+程序头部仅对于可执行文件和共享目标文件有意义。
+
+可执行目标文件在 ELF 头部的 `e_phentsize` 和 `e_phnum` 成员中给出其自身程序头部的大小。
+
+```c
+struct proghdr {
+    uint32_t p_type;   // 可加载的代码或数据，动态链接信息等；（段类型；）
+    uint32_t p_offset; // 段文件偏移地址；（段相对文件头的偏移值；）
+    uint32_t p_va;     // 指向映射段的虚拟地址；（段的第一个字节将被放到内存中的虚拟地址；）
+    uint32_t p_pa;     // 物理地址，该信息不再使用；
+    uint32_t p_filesz; // 文件中段的大小；
+    uint32_t p_memsz;  // 内存中段的大小 (bigger if contains bss）；（段在内存映像中占用的字节数；）
+    uint32_t p_flags;  // 读、写、可执行位；
+    uint32_t p_align;  // 需要对齐，硬件页面大小不变；
+};
+```
+
+根据 elfhdr 和 proghdr 的结构描述，bootloader 就可以完成对 ELF 格式的 ucore 操作系统的加载过程。
+
+> Link Address 是指编译器指定代码和数据所需要放置的内存地址，由链接器配置；
+> Load Address 是指程序被实际加载到内存的位置（由程序加载器 ld 配置）；
+> 一般由可执行文件结构信息和加载器可保证这两个地址相同。
+>
+> Link Addr 和 LoadAddr 不同会导致：
+>   - 直接跳转位置错误；
+>   - 直接内存访问（只读数据区或 bss 等直接地址访问）错误；
+>   - 堆和栈等的使用不受影响，但是可能会覆盖程序、数据区域；
+>
+> 注意：也存在 Link 地址和 Load 地址不一样的情况（例如：动态链接库）。
+
+### 2.5.7 A20 Gate
+
+Intel 早期的 8086 CPU 提供了 20 根地址线，可寻址空间范围即 `0~2^20` (00000H ~ FFFFFH) 的 1MB 内存空间。
+
+8086 的数据处理位宽位 16 位，无法直接寻址 1MB 内存空间，所以 8086 提供了段地址加偏移地址的地址转换机制。
+
+PC 机的寻址结构是 `segment:offset`，`segment`、`offset` 都是 16 位的寄存器，最大值是 0ffffh。
+
+换算成物理地址的计算方法是把 `segment` 左移 4 位，再加上 offset。
+
+所以 `segment:offset` 所能表达的寻址空间最大应为 `0ffff0h + 0ffffh = 10ffefh`（前面的 `0ffffh` 是 `segment=0ffffh` 并向左移动 4 位的结果，后面的 `0ffffh` 是可能的最大 `offset`）。
+
+这个计算出的 `10ffefh` 大约是 `1088KB`，`segment:offset` 的地址表示能力，超过了 20 位地址线的物理寻址能力。
+
+当寻址到超过 1MB 的内存时，会发生 `回卷`（不会发生异常）。
+
+下一代的基于 Intel 80286 CPU 的 PC AT 计算机系统提供了 24 根地址线，这样 CPU 的寻址范围变为 `2^24=16M`，
+
+Intel 80286 提供了保护模式，可以访问到 1MB 以上的内存了，此时如果遇到寻址超过 1MB 的情况，系统不会再 `回卷` 了，这就造成了向下不兼容。
+
+为了保持完全的向下兼容性，IBM 决定在 PC AT 计算机系统上加个硬件逻辑，来模仿以上的回绕特征，于是出现了 A20 Gate。
+
+他们的方法就是把 A20 地址线控制和键盘控制器的一个输出进行 AND 操作，这样来控制 A20 地址线的打开（使能）和关闭（屏蔽\禁止）。
+
+一开始时 A20 地址线控制是被屏蔽的（总为 0），直到系统软件通过一定的 IO 操作去打开它（参看 bootasm.S）。
+
+在实模式下要访问高端内存区，这个开关必须打开。
+
+在保护模式下，由于使用 32 位地址线，如果 A20 恒等于0，那么系统只能访问奇数兆的内存，即只能访问 0-1M、2-3M、4-5M......。
+
+这是不行的，所以在保护模式下，这个开关也必须打开。
+
+当 A20 地址线控制禁止时，则程序就像在 8086 中运行，1MB 以上的地址是不可访问的。
+
+在保护模式下 A20 地址线控制是要打开的。
+
+为了使能所有地址位的寻址能力,必须向键盘控制器 8042 发送一个命令。
+
+键盘控制器 8042 将会将它的的某个输出引脚的输出置高电平，作为 A20 地址线控制的输入。
+
+一旦设置成功之后，内存将不会再被绕回 (memory wrapping)，这样我们就可以寻址整个 286 的 16M 内存，或者是寻址 80386 级别机器的所有 4G 内存了。
+
+**问：从软件的角度来看，如何控制键盘控制器 8042 呢？**
+
+早期的 PC 机，控制键盘有一个单独的单片机 8042，现如今这个芯片已经给集成到了其它大片子中，但其功能和使用方法还是一样。
+
+当 PC 机刚刚出现 A20 Gate 的时候，估计为节省硬件设计成本，工程师使用这个 8042 键盘控制器来控制 A20 Gate，但 A20 Gate 与键盘管理没有一点关系。
+
+8042 键盘控制器的 IO 端口是 `0x60-0x6f`，实际上 IBM PC/AT 使用的只有 `0x60` 和 `0x64` 两个端口（0x61、0x62、0x63 用于与 XT 兼容目的）。
+
+8042 通过这些端口给键盘控制器或键盘发送命令或读取状态。
+
+输出端口 P2 用于特定目的。
+
+位 0（P20 引脚）用于实现 CPU 复位操作，位 1（P21 引脚）用户控制 A20 信号线的开启与否。
+
+系统向输入缓冲（端口 0x64）写入一个字节，即发送一个键盘控制器命令。
+
+可以带一个参数，参数是通过 0x60 端口发送的，命令的返回值也从端口 0x60 去读。
+
+8042 有 4 个寄存器。
+
+- 1 个 8-bit 长的 Input buffer；Write-Only；
+- 1 个 8-bit 长的 Output buffer；Read-Only；
+- 1 个 8-bit 长的 Status Register；Read-Only；
+- 1 个 8-bit 长的 Control Register；Read/Write。
+
+有两个端口地址：60h 和 64h。
+
+- 读 60h 端口，读 output buffer；
+- 写 60h 端口，写 input buffer；
+- 读 64h 端口，读 Status Register；
+- 操作 Control Register；
+    - 首先要向 64h 端口写一个命令（20h 为读命令，60h 为写命令）；
+    - 然后根据命令从 60h 端口读出 Control Register 的数据或者向 60h 端口写入 Control Register 的数据（64h 端口还可以接受许多其它的命令）。
+
+Status Register 的定义（要用 bit 0 和 bit 1）。
+
+- 0：output register (60h) 中有数据；
+- 1：input register (60h/64h) 有数据；
+- 2：系统标志（上电复位后被置为0）；
+- 3：data in input register is command (1) or data (0)；
+- 4：1 = keyboard enabled, 0=keyboard disabled (via switch)；
+- 5：1 = transmit timeout (data transmit not complete)；
+- 6：1 = receive timeout (data transmit not complete)；
+- 7：1 = even parity rec'd, 0=odd parity rec'd (should be odd)；
+
+除了这些资源外，8042 还有 3 个内部端口：Input Port、Outport Port、Test Port。
+
+这 3 个端口的操作都是通过向 64h 发送命令，然后在 60h 进行读写的方式完成。
+
+其中本文要操作的 A20 Gate 被定义在 Output Port 的 bit 1 上，所以有必要对 Outport Port 的操作及端口定义做一个说明。
+
+- 读 Output Port：向 64h 发送 0d0h 命令，然后从 60h 读取 Output Port 的内容；
+- 写 Output Port：向 64h 发送 0d1h 命令，然后向 60h 写入 Output Port 的数据；
+- 禁止键盘操作命令：向 64h 发送 0adh；
+- 打开键盘操作命令：向 64h 发送 0aeh；
+
+有了这些命令和知识，就可以实现操作 A20 Gate 来从实模式切换到保护模式了。
+
+理论上讲，我们只要操作 8042 芯片的输出端口（64h）的 bit 1，就可以控制 A20 Gate。
+
+但实际上，当我们准备向 8042 的输入缓冲区里写数据时，可能里面还有其它数据没有处理。
+
+所以，要首先禁止键盘操作，同时等待数据缓冲区中没有数据以后，才能真正地去操作 8042 打开或者关闭 A20 Gate。
+
+打开 A20 Gate 的具体步骤如下。（参考 bootasm.S）
+
+1. 等待 8042 Input buffer 为空；
+2. 发送 Write 8042 Output Port (P2) 命令到 8042 Input buffer；
+3. 等待 8042 Input buffer 为空；
+4. 将 8042 Output Port (P2) 得到字节的第 2 位置 1，然后写入 8042 Input buffer。
+
+## 2.6 为什么不利用 BIOS 直接加载操作系统？
 
 1. 不同操作系统可能拥有不同的文件系统，BIOS无法编写所有文件系统的解析代码，所以将加载程序作为操作系统的一部分；
 
@@ -571,27 +766,53 @@ bootblock 主要涉及到的源文件有 `bootmain.c`、`bootasm.S`、`sign.c`�
 
 3. 主引导记录和活动分区的存在主要是硬盘分区的原因。
 
-## bootasm.S
+## 2.7 bootasm.S 的实现
 
 在实模式下，段寄存器和 ip 寄存器只提供 16 位的操作空间。
 
 为了寻址 1MB 的内存空间，此时段寄存器存储的基值（16 位，base）会左移四位，加上偏移量（IP 寄存器，offset）作为逻辑地址。
 
-### 设置重要数据段寄存器
+### 2.7.1 关闭中断并设置代码执行方向
+
+bootloader 开始的时候需要关闭中断，以临界段的形式安全执行启动代码。
+
+设置代码向地址递增的方向执行。
+
+```c
+# 实模式的起始地址为 0:7c00，为 bootloader 的起始地址；
+.globl start
+start:
+.code16                                             # 指定为 16 位模式；
+    cli                                             # 失能中断；
+    cld                                             # 代码向地址递增的方向执行；（方向标志位置 0 指令）；
+```
+
+### 2.7.2 设置重要数据段寄存器
 
 一开始 CPU 还处于实模式，段机制还未启动，但是将 CPU 转成保护模式之前需要将重要的段寄存器设置好，转换前段寄存器 DS、ES、SS 需置 0。
 
 ```c
-# 设置重要的数据段寄存器：DS、ES、SS；
+# 关注点 1：
+# 设置重要段寄存器：DS、ES、SS；
+#
+#   DS：数据段 (Data Segment)；
+#   ES：附加数据段 (Extra Segment)；
+#   SS：堆栈段 (Stack Segment)；
+#
+#   AX：累加器；
+#
+# xorw 异或运算，16 位；
+# movw 字传送，16 位；
+
 xorw %ax, %ax                                   # Segment number zero
 movw %ax, %ds                                   # -> Data Segment
 movw %ax, %es                                   # -> Extra Segment
 movw %ax, %ss                                   # -> Stack Segment
 ```
 
-### 开启 A20 地址线
+### 2.7.3 开启 A20 地址线
 
-在进入保护模式之前，需要开启 A20 地址线。
+在进入保护模式之前，需要开启 A20 地址线，获得 32 位的寻址空间（4GB）。
 
 1. 等待 8042 Input buffer 为空；
 2. 发送 Write 8042 Output Port（P2）命令到 8042 Input buffer；
@@ -599,13 +820,26 @@ movw %ax, %ss                                   # -> Stack Segment
 4. 将 8042 Output Port（P2）得到字节的第 2 位置 1，然后写入 8042 Input buffer；
 
 ```c
+# 关注点 2：
+# 使能 A20 地址线；
+# 
+# 为了兼容早期的 PC 机，物理地址行 20 被固定在较低的位置，因此高于 1MB 的地址默认为 0，这段代码会取消它；
+#
+# al：累加器；
+#
+# inb：I/O 端口输入，8 位；
+# outb：I/O 端口输出，8 位；
+# testb：测试，8 位（两操作数作与运算，仅修改标志位，不回送结果）；
+# jne/jnz：不等于时转移；
+
 seta20.1:
-    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+                                                    # 从输入缓冲（端口 0x64）读取一个数据到累加器中；
+    inb $0x64, %al                                  # 等待 8042 Input buffer 为空；
     testb $0x2, %al                                 # 如果 %al 第低 2 位为 1，则 ZF = 0, 则跳转；
     jnz seta20.1                                    # 如果 %al 第低 2 位为 0，则 ZF = 1, 则不跳转；
 
     movb $0xd1, %al                                 # 0xd1 -> port 0x64
-    outb %al, $0x64                                 # 0xd1 means: write data to 8042's P2 port
+    outb %al, $0x64                                 # 0xd1: 向 8042 的输出端口 P2 写入信息；
 
 seta20.2:
     inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
@@ -613,61 +847,174 @@ seta20.2:
     jnz seta20.2
 
     movb $0xdf, %al                                 # 0xdf -> port 0x60
-    outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
+    outb %al, $0x60                                 # 0xdf = 11011111，设置 P2 的 A20 位（第 1 位）为 1；
 ```
 
-### 载入 GDT
+### 2.7.4 载入 GDTR
 
-接下来载入 GDT。
+接下来载入 GDTR（GDT 的大小和基地址），初始化全局描述符表。
+
+这里需要用到 32 位控制寄存器。
+
+- CR0
+    - 包含了 6 个预定义标志；
+    - 0 位是 `保护允许位 PE (Protedted Enable)`；
+        - 用于启动保护模式；
+        - PE = 1，保护模式启动；
+        - PE = 0，在实模式下运行；
+    - 1 位是 `监控协处理位 MP (Moniter coprocessor)`；
+        - 它与第 3 位一起决定；
+        - TS = 1，操作码 WAIT 产生一个协处理器不能使用的出错信号；
+    - 2 位是 `模拟协处理器位 EM (Emulate coprocessor)`；
+        - EM = 1，不能使用协处理器；
+        - EM = 0，允许使用协处理器；
+    - 3 位是 `任务转换位 (Task Switch)`；
+        - 当一个任务转换完成之后，自动将它置 1；
+        - TS = 1，就不能使用协处理器；
+    - 4 位是 `微处理器的扩展类型位 ET (Processor Extension Type)`；
+        - 其内保存着处理器扩展类型的信息；
+        - ET = 0，标识系统使用的是 287 协处理器；
+        - ET = 1，表示系统使用的是 387 浮点协处理器；
+    - 31 位是 `分页允许位(Paging Enable)`；
+        - 它表示芯片上的分页部件是否允许工作。
+- CR1
+    - 未定义的控制寄存器，供将来的处理器使用；
+- CR2
+    - 页故障线性地址寄存器，保存最后一次出现页故障的全 32 位线性地址；
+- CR3
+    - 页目录基址寄存器，保存页目录表的物理地址；
+    - 页目录表总是放在以 4K 字节为单位的存储器边界上；
+    - 它的地址的低12位总为0，不起作用，即使写上内容，也不会被理会。
+
+这几个寄存器中保存 `全局性` 和 `任务无关` 的机器状态。
+
+这几个寄存器是与 `分页机制` 密切相关的，因此，在进程管理及虚拟内存管理中会涉及到这几个寄存器，要记住 CR0、CR2、CR3 这 3 个寄存器的内容。
+
+gdt 的引导程序如下。
 
 ```c
-    # 全局描述符表：存放 8 字节的段描述符，段描述符包含段的属性。
-    # 段选择符   ：总共 16 位，高 13 位用作全局描述符表中的索引位，GDT 的第一项总是设为 0，
-    #               因此孔断选择符的逻辑地址会被认为是无效的，从而引起一个处理器异常；
-    #               GDT 表项最大数目是 8191 个，即 2^13 - 1；
-    # Switch from real to protected mode, using a bootstrap GDT
-    # and segment translation that makes virtual addresses
-    # identical to physical addresses, so that the
-    # effective memory map does not change during the switch.
-    lgdt gdtdesc
-    ...
-
-# Bootstrap GDT
+# GDTR 引导程序；
 .p2align 2                                          # 强制 4 字节对齐；
-gdt:
-    SEG_NULLASM                                     # null seg
+gdt:                                                # #标识符，表示地址；
+    SEG_NULLASM                                     # 第一段永远为 0，不用；
     SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel
     SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
 
-gdtdesc:
+gdtdesc:                                            # GDTR 寄存器，用 lgdt 加载；
     .word 0x17                                      # sizeof(gdt) - 1
     .long gdt                                       # address gdt
 ```
 
-- CPU 会先读取 GDT 的描述信息，确定 GDT 的大小（24 字节）；
-- 再跳转到 gdt 的所在地址，执行内存分段。
-- 实验环境中，内存被分为代码段和数据段，大小都为 4G（0x0 ~ 0xffffffff）；
-- 设置完成之后，进入 32 位的保护模式，进行相应的准备工作。
+通过 `SEG_ASM` 设置全局描述符，只是简单的为内核的代码加载初始化 GDT 而已。
+
+启动保护模式的程序如下。
 
 ```c
-.code32                                             # Assemble for 32-bit mode
-protcseg:
-    # Set up the protected-mode data segment registers
-    movw $PROT_MODE_DSEG, %ax                       # Our data segment selector
-    movw %ax, %ds                                   # -> DS: Data Segment
-    movw %ax, %es                                   # -> ES: Extra Segment
-    movw %ax, %fs                                   # -> FS
-    movw %ax, %gs                                   # -> GS
-    movw %ax, %ss                                   # -> SS: Stack Segment
+# 关注点 3：
+# 全局描述符表 GDT：存放 8 字节的段描述符，段描述符包含段的属性；
+#
+# 段选择符       ：总共 16 位，高 13 位用作全局描述符表中的索引位，GDT 的第一项总是设为 0，
+#                   因此孔断选择符的逻辑地址会被认为是无效的，从而引起一个处理器异常；
+#                   GDT 表项最大数目是 8191 个，即 2^13 - 1；
+#
+# 从实模式切换到保护模式，使用 GDT 引导和段转换，使虚拟地址与物理地址相同，有效的内存映射在切换期间不会改变；
+# lgdt 指令是将 GDT 入口地址存到 gdtdesc 寄存器里；
+#
+# orl：32 位或运算；
+#
+# eax：32 位累加器；
+# cr0：32 位控制寄存器；
 
-    # 设置堆栈指针并调用 C 中的程序，堆栈区域从 0 到 start (0x7C00)；
-    movl $0x0, %ebp
-    movl $start, %esp
-    call bootmain
+lgdt gdtdesc                                    # 通过 lgdt 指令把表的地址和大小装入 GDTR 寄存器；
+movl %cr0, %eax                                 # 获取 CR0 寄存器中的数值；
+orl $CR0_PE_ON, %eax                            # 0 位是保护允许位 PE (Protedted Enable)，置 1 来启动保护模式；
+movl %eax, %cr0                                 # 将累加器的值赋给 cr0；
+
+# 到这里，跳转到下一个指令，但在 32 位代码段；
+# 将处理器切换到 32 位模式；
+# ljmp：将处理器切换到 32 位模式，以 32 位模式进行跳转；
+#
+# PROT_MODE_CSEG = 0x8，内核代码段选择器；
+#
+# 由于上面的代码已经打开了保护模式了，所以这里要使用逻辑地址，而不是之前实模式的地址了；
+# 这里用到了 PROT_MODE_CSEG，它的值是 0x8
+# 根据段选择子的格式定义，0x8 翻译为：
+#　　　　　　　    INDEX　　　　　　　TI     CPL
+#　　　　    0000 0000 0000 1      00      0
+# INDEX 代表 GDT 中的索引，TI 代表是否使用 GDTR 中的 GDT，CPL 代表处于的特权级；
+
+ljmp $PROT_MODE_CSEG, $protcseg                 # 跳转到程序段 protcseg；
 ```
 
-- 一切准备工作就绪后，调用 C 函数 bootmain.c 继续执行以至可以加载操作系统内核；
-- call bootmain、bootmain 负责将内核加载到内存 0x10000 处，并检查是否为合法的 ELF 文件。
+### 2.7.5 初始化段寄存器和 BIOS 的数据栈并跳转到 bootmain
+
+通过段选择子跳转到内核代码开始的位置设置。
+
+- DS、ES、FS、GS、SS；
+- BIOS 的数据栈位 `0-0x7c00`；
+    - ebp: 0
+    - esp: 0x7c00
+
+将数据段选择上之后，设置堆栈并跳转到 bootmain 中。
+
+```c
+.code32                                             # 汇编 32 位模式；
+protcseg:
+    # 关注点 4：
+    # 设置保护模式的数据段寄存器并跳转到主程序；
+    # 
+    # PROT_MODE_DSEG = 0x10，内核数据段选择器；
+    #
+    # DS：数据段 (Data Segment)；
+    # ES：附加数据段 (Extra Segment)；
+    # SS：堆栈段 (Stack Segment)；
+    # FS：附加段；
+    # GS：附加段；
+
+    movw $PROT_MODE_DSEG, %ax                       # 数据段选择器；
+    movw %ax, %ds                                   # -> DS：数据段 (Data Segment)；
+    movw %ax, %es                                   # -> ES：附加数据段 (Extra Segment)；
+    movw %ax, %fs                                   # -> FS：附加段；
+    movw %ax, %gs                                   # -> GS：附加段；
+    movw %ax, %ss                                   # -> SS：堆栈段 (Stack Segment)；
+
+    # 设置堆栈指针并调用 C 中的程序，堆栈区域从 0 到 start (0x7C00)；
+    #
+    # 为了让读内核的 bootmain 有数据可以放；
+    #
+    # esp   栈指针寄存器 (extended stack pointer)
+    #       寄存器存放当前线程的栈顶指针；
+    # ebp   基址指针寄存器 (extended base pointer)
+    #       寄存器存放当前线程的栈底指针；
+    # eip
+    #       寄存器存放下一个 CPU 指令存放的内存地址；
+    #       当 CPU 执行完当前的指令后，从 eip 寄存器中读取下一条指令的内存地址，然后继续执行。
+
+    movl $0x0, %ebp                                 # 清空当前线程栈底指针；
+    movl $start, %esp                               # 将 start 放到栈顶；
+    call bootmain                                   # 调用 bootmain 函数；
+
+    # bootmain 返回的地方，实际上不会执行到这里，若执行到此处则循环；
+spin:
+    jmp spin
+```
+
+## 2.8 bootmain.c 的实现
+
+[JOS lab1 boot 加载操作系统](https://blog.csdn.net/Poundssss/article/details/50927974)
+
+[MIT 6.828 学习笔记2 阅读main.c](https://blog.csdn.net/scnu20142005027/article/details/51150601)
+
+- 一切准备工作就绪后，调用 C 文件 bootmain.c 中的函数 bootmain 继续执行以至可以加载操作系统内核；
+- bootmain 负责将内核加载到内存 0x10000 处，并检查是否为合法的 ELF 文件。
+
+### 2.8.1 读取磁盘第 1 页来获得 ELFHDR 的数据
+
+定义一个暂存空间 `ELFHDR`，从地址 `0x10000` 开始，使用一个 elf 文件头部的结构体指针来指向该段区域。
+
+```c
+#define ELFHDR          ((struct elfhdr *)0x10000) 
+```
 
 `elf.h` 中对 elf 文件头部信息声明的结构体如下。
 
@@ -737,5 +1084,200 @@ $3 = {
 (gdb) 
 ```
 
+首先进行数据的读取。
 
+```c
+/* 
+ * 函数功能：bootloader 的入口；
+ */
+void
+bootmain(void) {
+    // 读取磁盘第 1 页来获得 ELFHDR 的数据；
+    // 读取 4K 的数据；
+    readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
 
+    ...
+}
+```
+
+其具体实现如下。
+
+```c
+/* 
+ * 函数功能：从内核的虚拟地址 va 偏移 offset 的位置读取 count 个字节；
+ * 备   注：可能复制读取的数据比请求的数据要多；
+ */
+static void
+readseg(uintptr_t va, uint32_t count, uint32_t offset) {
+    uintptr_t end_va = va + count;
+
+    // 四舍五入到区域边界，获取当前所在块的首地址；
+    va -= offset % SECTSIZE;
+
+    // 从字节转换到扇区，内核从扇区 1 开始；
+    uint32_t secno = (offset / SECTSIZE) + 1;
+
+    // 如果觉得这种读取方式慢，可以一次读取多个扇区；
+    // 我们写入内存的数据可能要比请求的多，不过问题不大，我们按递增顺序加载数据；
+    for (; va < end_va; va += SECTSIZE, secno ++) {
+        readsect((void *)va, secno);
+    }
+}
+```
+
+内部读取扇区的实现如下。
+
+```c
+/*
+ * 函数功能：等待磁盘就绪；
+ */
+static void
+waitdisk(void) {
+    // 0x1F7 的输入 1100 0000 最高 2 位，如果为 0100 0000 中的 01，则跳出循环；
+    while ((inb(0x1F7) & 0xC0) != 0x40)
+        /* 空跑； */;
+}
+
+/*
+ * 函数功能：从 secno 读取单个扇区到 dst；
+ */
+static void
+readsect(void *dst, uint32_t secno) {
+    // 等待磁盘就绪；
+    waitdisk();
+
+    outb(0x1F2, 1);                             // count = 1，读取数量为 1；
+    outb(0x1F3, secno & 0xFF);                  // 表示读取磁盘的扇区编号；
+    outb(0x1F4, (secno >> 8) & 0xFF);           // 扇区号；
+    outb(0x1F5, (secno >> 16) & 0xFF);          // 柱面号低 8 位；
+    outb(0x1F6, ((secno >> 24) & 0xF) | 0xE0);  // 柱面号高 8 位，0xE0 = 11100000，代表主驱动器，LBA 寻址方式；
+    outb(0x1F7, 0x20);                          // cmd 0x20，读取扇区的指令；
+
+    // 等待磁盘就绪；
+    waitdisk();
+
+    // 使用 32 位串输入指令 insl 来读取数据到 dst；
+    insl(0x1F0, dst, SECTSIZE / 4);
+}
+```
+
+这 2 个函数中，比较令人疑惑的是 `0x1F2` 到 `0x1F7` 代表什么，还有为什么要写入 `offset`。
+
+先来看看关于 ATA 和 LBA 的资料（这里的寻址方式应该是 28-bit LBA）。
+
+- 0x1F0 R/W，数据寄存器；
+- 0x1F0 R/W，错误诊断寄存器；
+- 0x1F2 R/W，扇区数寄存器，记录操作的扇区数；
+- 0x1F3 R/W，扇区号寄存器，记录操作的起始扇区号；
+- 0x1F4 R/W，柱面号寄存器，记录柱面号的低 8 位；
+- 0x1F5 R/W，柱面号寄存器，记录柱面号的高 8 位；
+- 0x1F6 R/W，驱动器/磁头寄存器，记录操作的磁头号，驱动器号，和寻道方式；
+    -   前 4 位代表逻辑扇区号的高 4 位；
+    -   DRV = 0/1 代表主/从驱动器；
+    -   LBA = 0/1 代表 CHS/LBA 方式；
+- 0x1F7 R，状态寄存器，第 6、7 位分别代表驱动器准备好，驱动器忙；
+- 0x1F8 W，命令寄存器，0x20 命令代表读取扇区；
+
+ucore 这里的和该资料有一点区别，`0x1F7` 是命令寄存器，其他信息基本一致。
+
+### 2.8.2 检查 ELF 的有效性
+
+通过比对 ELFHDR 中 e_magic 字段的数值是否为 `0x464C457FU` 来判断 ELF 文件的有效性。
+
+magic number 可以理解为识别文件类型的一段标识。
+
+```c
+#define ELF_MAGIC    0x464C457FU            // "\x7FELF" in little endian
+
+/* 
+ * 函数功能：bootloader 的入口；
+ */
+void
+bootmain(void) {
+    // 读取磁盘第 1 页来获得 ELFHDR 的数据；
+    // 读取 4K 的数据；
+    readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
+
+    // 检查 ELF 的有效性；
+    // 第一页上的 ELFHDR->e_magic 数值必须等于 ELF_MAGIC 0x464C457FU；
+    if (ELFHDR->e_magic != ELF_MAGIC) {
+        goto bad;
+    }
+}
+```
+
+如果无效，则使用 goto 语句跳转到 bad 函数，阻塞在这里。
+
+```c
+void
+bootmain(void) {
+    ...
+bad:
+    outw(0x8A00, 0x8A00);
+    outw(0x8A00, 0x8E00);
+
+    // 空循环，将程序阻塞在这里；
+    while (1);
+}
+```
+
+### 2.8.3 读取剩下的内核程序
+
+ELF 文件的具体结构如下。
+
+![ELF 文件](https://img-blog.csdnimg.cn/20210402144510536.png)
+
+可以利用 `objdump -p kernel` 命令来查看内核程序中的 program header 条目。
+
+```bash
+moocos-> objdump -p kernel
+
+kernel:     file format elf32-i386
+
+Program Header:
+    LOAD off    0x00001000 vaddr 0x00100000 paddr 0x00100000 align 2**12
+         filesz 0x0000d6a9 memsz 0x0000d6a9 flags r-x
+    LOAD off    0x0000f000 vaddr 0x0010e000 paddr 0x0010e000 align 2**12
+         filesz 0x00000a16 memsz 0x00001d80 flags rw-
+   STACK off    0x00000000 vaddr 0x00000000 paddr 0x00000000 align 2**4
+         filesz 0x00000000 memsz 0x00000000 flags rwx
+```
+
+第 1 段与第 1 段都是 4KB 对齐的，1 个扇区是 512KB，也就是占了 8 个扇区，而这两段也就是上面结构图中两个大括号表示的那 2 段。
+
+第 2 段的 filesz 与 memsz 是不相同的，这是因为 .bss 节中的全局变量在文件中不占空间，在内存中才分配空间并初始化。
+
+```c
+void
+bootmain(void) {
+    ...
+
+    // 加载每个程序段（忽略 ph 标志）；
+    // 指向内核程序 program header table 头部；
+    ph = (struct proghdr *)((uintptr_t)ELFHDR + ELFHDR->e_phoff);
+    // 指向内核程序 program header table 尾部；
+    eph = ph + ELFHDR->e_phnum;
+
+    for (; ph < eph; ph ++) {
+        // 逐段将内核程序读入内存；
+        readseg(ph->p_va & 0xFFFFFF, ph->p_memsz, ph->p_offset);
+    }
+
+    ...
+}
+```
+
+### 2.8.4 跳转到内核程序
+
+```c
+void
+bootmain(void) {
+    ...
+
+    // 从 ELF 的头部信息中找到内核起始点的函数地址；
+    // 运行之后不再返回；
+    ((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();
+
+    ...
+}
+```
