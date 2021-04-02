@@ -169,7 +169,7 @@ $(call finish_all)
 
 # -------------------------------------------------------------------
 
-.PHONY: bootblock kernel qemu img
+.PHONY: bootblock kernel img
 
 bootblock: $(bootblock)
 	$(info create bootblock)
@@ -180,8 +180,13 @@ kernel: $(kernel)
 img: $(UCOREIMG)
 	$(info create img)
 
+.PHONY: qemu gdb
+
 qemu: $(UCOREIMG)
-	$(QEMU) -no-reboot -parallel stdio -hda $< -serial null
+	$(V)$(QEMU) -no-reboot -parallel stdio -hda $< -serial null
+
+gdb: $(UCOREIMG)
+	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null
 
 .PHONY: clean
 
