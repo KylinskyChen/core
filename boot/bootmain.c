@@ -75,6 +75,7 @@ readseg(uintptr_t va, uint32_t count, uint32_t offset) {
     va -= offset % SECTSIZE;
 
     // 从字节转换到扇区，内核从扇区 1 开始；
+    // 由于第 1 个扇区被 bootloader 占据，kernel 内核从第二个扇区开始(下标为 1)，所以扇区号需要增加 1；
     uint32_t secno = (offset / SECTSIZE) + 1;
 
     // 如果觉得这种读取方式慢，可以一次读取多个扇区；

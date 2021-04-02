@@ -9,37 +9,48 @@
 #include <intr.h>
 #include <pmm.h>
 #include <kmonitor.h>
+
 void kern_init(void) __attribute__((noreturn));
 void grade_backtrace(void);
 static void lab1_switch_test(void);
 
+/*
+ * 函数功能：内核入口；
+ */
 void
 kern_init(void){
     extern char edata[], end[];
     memset(edata, 0, end - edata);
 
-    cons_init();                // init the console
+    // 初始化控制台（控制显卡交互）；
+    // 只有设置好了对显卡的控制后，std_out 输出的信息（例如 cprintf）才能显示在控制台中；
+    cons_init();               
 
-    const char *message = "(THU.CST) os is loading ...";
+    const char *message = "xiechen's os is loading ...";
     cprintf("%s\n\n", message);
 
     print_kerninfo();
 
     grade_backtrace();
 
-    pmm_init();                 // init physical memory management
+    // 初始化物理内存管理器；
+    pmm_init();
 
-    pic_init();                 // init interrupt controller
-    idt_init();                 // init interrupt descriptor table
+    // 初始化中断控制器；
+    pic_init();                
+    // 初始化中断描述符表；
+    idt_init();
 
-    clock_init();               // init clock interrupt
-    intr_enable();              // enable irq interrupt
+    // 初始化定时芯片；
+    clock_init();
+    // 开中断；
+    intr_enable();              
 
     //LAB1: CAHLLENGE 1 If you try to do it, uncomment lab1_switch_test()
     // user/kernel mode switch test
     lab1_switch_test();
 
-    /* do nothing */
+    // 阻塞，避免内核程序退出。通过监听中断事件进行服务；
     while (1);
 }
 

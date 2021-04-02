@@ -30,8 +30,15 @@ main(int argc, char *argv[]) {
         return -1;
     }
     fclose(ifp);
+
+    /* 
+        为了避免所加载的磁盘引导扇区是一个无效扇区 (可能引导扇区中的内容就是空的或是乱码)，
+        要求 512 字节大小的扇区在其最后两字节必须是 0x55 0xAA (其余的空余空间可以用 0x00 填充)，
+        否则无法通过 BIOS 的校验，引导失败。 
+     */
     buf[SIZE - 2] = 0x55;
     buf[SIZE - 1] = 0xAA;
+
     FILE *ofp = fopen(argv[2], "wb+");
     size = fwrite(buf, 1, SIZE, ofp);
     if (size != SIZE) {
