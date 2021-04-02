@@ -8,7 +8,7 @@
 5. 第 5 问：为什么不利用 BIOS 直接加载操作系统？
 6. 第 6 问：bootloader 的实现中需要关注哪些硬件知识？
 7. 第 7 问：bootloader 是怎么实现的？
-9. 第 8 问：kernel 是如何实现的？
+9. 第 8 问：kernel 是如何生成的？
 
 # 二、环境
 
@@ -1281,3 +1281,55 @@ bootmain(void) {
     ...
 }
 ```
+
+## 2.9 生成 kernel
+
+建立一个伪目标 kernel 来生成 kernel。
+
+Makefile 的核心代码如下。
+
+```makefile
+KINCLUDE	+= kern/debug/ \
+			   kern/driver/ \
+			   kern/trap/ \
+			   kern/mm/
+
+KSRCDIR		+= kern/init \
+			   kern/libs \
+			   kern/debug \
+			   kern/driver \
+			   kern/trap \
+			   kern/mm
+
+KCFLAGS		+= $(addprefix -I,$(KINCLUDE))
+
+$(call add_files_cc,$(call listf_cc,$(KSRCDIR)),kernel,$(KCFLAGS))
+
+KOBJS	= $(call read_packet,kernel libs)
+
+# create kernel target
+kernel = $(call totarget,kernel)
+
+$(kernel): tools/kernel.ld
+
+$(kernel): $(KOBJS)
+	@echo + ld $@
+	$(LD) $(LDFLAGS) -T tools/kernel.ld -o $@ $(KOBJS)
+	$(OBJDUMP) -S $@ > $(call asmfile,kernel)
+	$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel)
+
+$(call create_target,kernel)
+```
+
+运行的结果如下。
+
+```bash
+ld -m    elf_i386 -nostdlib -T tools/kernel.ld -o bin/kernel  obj/kern/init/init.o obj/kern/libs/stdio.o obj/kern/libs/readline.o obj/kern/debug/panic.o obj/kern/debug/kdebug.o obj/kern/debug/kmonitor.o obj/kern/driver/clock.o obj/kern/driver/console.o obj/kern/driver/picirq.o obj/kern/driver/intr.o obj/kern/trap/trap.o obj/kern/trap/vectors.o obj/kern/trap/trapentry.o obj/kern/mm/pmm.o  obj/libs/string.o obj/libs/printfmt.o
+objdump -S bin/kernel > obj/kernel.asm
+objdump -t bin/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > obj/kernel.sym
+```
+
+ld 将各个静态库进行连接，使用脚本 kernel.ld 中的规则快速生成了 kernel。
+
+使用 objdump 将 kernel 的信息反汇编到了 kernel.asm、kernel.sym 便于学习。
+

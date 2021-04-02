@@ -107,10 +107,43 @@ $(call add_files_host,tools/sign.c,sign,sign)
 $(call create_target_host,sign,sign)
 
 # -------------------------------------------------------------------
+# kernel
+
+KINCLUDE	+= kern/debug/ \
+			   kern/driver/ \
+			   kern/trap/ \
+			   kern/mm/
+
+KSRCDIR		+= kern/init \
+			   kern/libs \
+			   kern/debug \
+			   kern/driver \
+			   kern/trap \
+			   kern/mm
+
+KCFLAGS		+= $(addprefix -I,$(KINCLUDE))
+
+$(call add_files_cc,$(call listf_cc,$(KSRCDIR)),kernel,$(KCFLAGS))
+
+KOBJS	= $(call read_packet,kernel libs)
+
+# create kernel target
+kernel = $(call totarget,kernel)
+
+$(kernel): tools/kernel.ld
+
+$(kernel): $(KOBJS)
+	@echo + ld $@
+	$(LD) $(LDFLAGS) -T tools/kernel.ld -o $@ $(KOBJS)
+	$(OBJDUMP) -S $@ > $(call asmfile,kernel)
+	$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel)
+
+$(call create_target,kernel)
+
+# -------------------------------------------------------------------
 
 # create ucore.img
 UCOREIMG	:= $(call totarget,ucore.img)
-kernel = kernel
 
 $(UCOREIMG): $(kernel) $(bootblock)
 	$(V)dd if=/dev/zero of=$@ count=10000
@@ -136,10 +169,16 @@ $(call finish_all)
 
 # -------------------------------------------------------------------
 
-.PHONY: test qemu
+.PHONY: bootblock kernel qemu img
 
-test: $(bootblock)
-	$(info finished)
+bootblock: $(bootblock)
+	$(info create bootblock)
+
+kernel: $(kernel)
+	$(info create kernel)
+
+img: $(UCOREIMG)
+	$(info create img)
 
 qemu: $(UCOREIMG)
 	$(QEMU) -no-reboot -parallel stdio -hda $< -serial null
