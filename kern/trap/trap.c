@@ -31,7 +31,9 @@ static struct pseudodesc idt_pd = {
     sizeof(idt) - 1, (uintptr_t)idt
 };
 
-/* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
+/*
+ * 函数功能：将 IDT 中断描述符表初始化为 kern/trap/vectors.S 中的每一个入口点；
+ */
 void
 idt_init(void) {
      /* LAB1 YOUR CODE : STEP 2 */
@@ -46,6 +48,14 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
+
+    // 问题：中断向量表中一个表项占多少字节？其中哪几位代表中断处理代码的入口？
+    //
+    //      中断向量表一个表项占用 8 字节；
+    //      2-3 字节是段选择子；
+    //      0-1 字节和 6-7 字节拼成位移，
+    //      两者联合便是中断处理程序的入口地址。
+
     extern uintptr_t __vectors[];
     int i;
     for (i = 0; i < sizeof(idt) / sizeof(struct gatedesc); i ++) {

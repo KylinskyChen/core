@@ -1,11 +1,10 @@
 #include <memlayout.h>
 
-# vectors.S sends all traps here.
+# vectors.s 在这里给出所有的静态分区；
 .text
 .globl __alltraps
 __alltraps:
-    # push registers to build a trap frame
-    # therefore make the stack look like a struct trapframe
+    # 存入寄存器来创建一个静态分区框架，栈此时看起来像一个框架；
     pushl %ds
     pushl %es
     pushl %fs

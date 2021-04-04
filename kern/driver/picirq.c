@@ -27,12 +27,14 @@ pic_enable(unsigned int irq) {
     pic_setmask(irq_mask & ~(1 << irq));
 }
 
-/* pic_init - initialize the 8259A interrupt controllers */
+/*
+ * 函数功能：初始化 8259A 中断控制器；
+ */
 void
 pic_init(void) {
     did_init = 1;
 
-    // mask all interrupts
+    // 屏蔽所有中断；
     outb(IO_PIC1 + 1, 0xFF);
     outb(IO_PIC2 + 1, 0xFF);
 

@@ -71,7 +71,9 @@ lgdt(struct pseudodesc *pd) {
 /* temporary kernel stack */
 uint8_t stack0[1024];
 
-/* gdt_init - initialize the default GDT and TSS */
+/*
+ * 函数功能：初始化默认的 GDT 和 TSS；
+ */
 static void
 gdt_init(void) {
     // Setup a TSS so that we can get the right stack when we trap from
@@ -91,7 +93,9 @@ gdt_init(void) {
     ltr(GD_TSS);
 }
 
-/* pmm_init - initialize the physical memory management */
+/*
+ * 函数功能：初始化终端设备；
+ */
 void
 pmm_init(void) {
     gdt_init();

@@ -1,7 +1,9 @@
 #include <x86.h>
 #include <intr.h>
 
-/* intr_enable - enable irq interrupt */
+/*
+ * 函数功能：使能 irq 中断；
+ */
 void
 intr_enable(void) {
     sti();

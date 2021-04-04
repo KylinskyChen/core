@@ -73,6 +73,8 @@ cga_init(void) {
     outb(addr_6845, 15);
     pos |= inb(addr_6845 + 1);
 
+    // 虚拟地址空间中显示 BUFFER 的地址；
+    // 这个 BUFFER 可能是 CGA_BUF 或 MONO_BUF，取决于一个 volatile 类型的指针 cp；
     crt_buf = (uint16_t*) cp;
     crt_pos = pos;
 }
@@ -94,7 +96,7 @@ serial_init(void) {
 
     // No modem controls
     outb(COM1 + COM_MCR, 0);
-    // Enable rcv interrupts
+    // 使能串口 1 接收字符后产生中断；
     outb(COM1 + COM_IER, COM_IER_RDI);
 
     // Clear any preexisting overrun indications and interrupts
@@ -104,10 +106,14 @@ serial_init(void) {
     (void) inb(COM1+COM_RX);
 
     if (serial_exists) {
+        // 通过中断控制器使能串口 1 中断；
         pic_enable(IRQ_COM1);
     }
 }
 
+/*
+ * 函数功能：打印字符串到并行端口；
+ */
 static void
 lpt_putc_sub(int c) {
     int i;
@@ -119,7 +125,9 @@ lpt_putc_sub(int c) {
     outb(LPTPORT + 2, 0x08);
 }
 
-/* lpt_putc - copy console output to parallel port */
+/*
+ * 函数功能：打印字符串到并行端口；
+ */
 static void
 lpt_putc(int c) {
     if (c != '\b') {
@@ -133,12 +141,13 @@ lpt_putc(int c) {
 }
 
 /*
- * 函数功能：打印字符串到终端；
+ * 函数功能：打印字符串到显示器上；
  */ 
 static void
 cga_putc(int c) {
     // c 的低 16 位的高 8 位是颜色，低 16 位的低 8 位为字符；
     // CGA 假设字符都是 ASCII 字符；
+    // 处理它依赖于平台（编译器）的实现，在 inc/stdarg.h 中；
 
     // 判断输入的字符是否有颜色属性，否则使用白底黑字；
     if (!(c & ~0xFF)) {
@@ -146,7 +155,7 @@ cga_putc(int c) {
     }
 
     switch (c & 0xff) { // 判断字符类型，对换行，退格等字符将调整 cga 显示位置 pos；
-        case '\b':
+        case '\b':      // 退格；
             if (crt_pos > 0) {
                 crt_pos --;
                 crt_buf[crt_pos] = (c & ~0xff) | ' ';
@@ -162,7 +171,10 @@ cga_putc(int c) {
             break;
     }
 
-    // What is the purpose of this?
+    // 所有的字符写入一个 char 数组称为 crt_buf[]；
+    //  crt_buf 是一个全局静态变量，是一个 uint_16t 的指针；
+
+    // 如果当前屏幕 (80 * 24) 输入满了，将会把第 2-24 行都上移一行，覆盖第一行，清空第 24 行，pos 置为 24 行首；
     if (crt_pos >= CRT_SIZE) {
         int i;
         memmove(crt_buf, crt_buf + CRT_COLS, (CRT_SIZE - CRT_COLS) * sizeof(uint16_t));
@@ -172,13 +184,16 @@ cga_putc(int c) {
         crt_pos -= CRT_COLS;
     }
 
-    // move that little blinky thing
+    // 移开光标；
     outb(addr_6845, 14);
     outb(addr_6845 + 1, crt_pos >> 8);
     outb(addr_6845, 15);
     outb(addr_6845 + 1, crt_pos);
 }
 
+/*
+ * 函数功能：使用串口打印字符信息；
+ */
 static void
 serial_putc_sub(int c) {
     int i;
@@ -188,7 +203,9 @@ serial_putc_sub(int c) {
     outb(COM1 + COM_TX, c);
 }
 
-/* serial_putc - print character to serial port */
+/*
+ * 函数功能：使用串口打印字符信息；
+ */
 static void
 serial_putc(int c) {
     if (c != '\b') {
@@ -410,6 +427,8 @@ static void
 kbd_init(void) {
     // drain the kbd buffer
     kbd_intr();
+
+    // 通过中断控制器使能键盘输入中断；
     pic_enable(IRQ_KBD);
 }
 
@@ -418,9 +437,9 @@ kbd_init(void) {
  */
 void
 cons_init(void) {
-    cga_init();     
-    serial_init();
-    kbd_init();
+    cga_init();         // 并口初始化；
+    serial_init();      // 串口初始化；
+    kbd_init();         // 键盘初始化；
     if (!serial_exists) {
         cprintf("serial port does not exist!!\n");
     }
@@ -431,8 +450,8 @@ cons_init(void) {
  */
 void
 cons_putc(int c) {
-    lpt_putc(c);    
-    cga_putc(c);    // 
+    lpt_putc(c);    // 打印字符串信息到并口上；
+    cga_putc(c);    // 打印字符串到显示器上；
     serial_putc(c); // 打印字符到串口；
 }
 

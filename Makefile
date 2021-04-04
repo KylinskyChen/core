@@ -180,13 +180,18 @@ kernel: $(kernel)
 img: $(UCOREIMG)
 	$(info create img)
 
-.PHONY: qemu gdb
+.PHONY: qemu gdb debug
 
 qemu: $(UCOREIMG)
 	$(V)$(QEMU) -no-reboot -parallel stdio -hda $< -serial null
 
 gdb: $(UCOREIMG)
 	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null
+
+debug: $(UCOREIMG)
+	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null &
+	$(V)sleep 2
+	$(V)$(TERMINAL)  -e "cgdb -q -x tools/gdbinit"
 
 .PHONY: clean
 

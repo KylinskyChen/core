@@ -113,6 +113,9 @@ bootmain(void) {
         readseg(ph->p_va & 0xFFFFFF, ph->p_memsz, ph->p_offset);
     }
 
+    // ELF 文件 0x1000 位置后面的 0xd1ec 比特被载入内存 0x00100000；
+    // ELF 文件 0xf000 位置后面的 0x1d20 比特被载入内存 0x0010e000；
+
     // 从 ELF 的头部信息中找到内核起始点的函数地址；
     // 运行之后不再返回；
     ((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();

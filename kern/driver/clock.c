@@ -25,14 +25,15 @@
 
 volatile size_t ticks;
 
-/* *
- * clock_init - initialize 8253 clock to interrupt 100 times per second,
- * and then enable IRQ_TIMER.
- * */
+/*
+ * 函数功能：初始化 8253 时钟每秒产生 100 次中断，是能 IRQ_TIMER；
+ */
 void
 clock_init(void) {
     // set 8253 timer-chip
     outb(TIMER_MODE, TIMER_SEL0 | TIMER_RATEGEN | TIMER_16BIT);
+
+    // //设置时钟每秒中断 100 次；
     outb(IO_TIMER1, TIMER_DIV(100) % 256);
     outb(IO_TIMER1, TIMER_DIV(100) / 256);
 
@@ -40,6 +41,8 @@ clock_init(void) {
     ticks = 0;
 
     cprintf("++ setup timer interrupts\n");
+
+    // 通过中断控制器使能时钟中断；
     pic_enable(IRQ_TIMER);
 }
 
