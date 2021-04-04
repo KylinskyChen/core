@@ -53,7 +53,6 @@ static uint16_t crt_pos;
 static uint16_t addr_6845;
 
 /* TEXT-mode CGA/VGA display output */
-
 static void
 cga_init(void) {
     volatile uint16_t *cp = (uint16_t *)CGA_BUF;
@@ -133,29 +132,34 @@ lpt_putc(int c) {
     }
 }
 
-/* cga_putc - print character to console */
+/*
+ * 函数功能：打印字符串到终端；
+ */ 
 static void
 cga_putc(int c) {
-    // set black on white
+    // c 的低 16 位的高 8 位是颜色，低 16 位的低 8 位为字符；
+    // CGA 假设字符都是 ASCII 字符；
+
+    // 判断输入的字符是否有颜色属性，否则使用白底黑字；
     if (!(c & ~0xFF)) {
         c |= 0x0700;
     }
 
-    switch (c & 0xff) {
-    case '\b':
-        if (crt_pos > 0) {
-            crt_pos --;
-            crt_buf[crt_pos] = (c & ~0xff) | ' ';
-        }
-        break;
-    case '\n':
-        crt_pos += CRT_COLS;
-    case '\r':
-        crt_pos -= (crt_pos % CRT_COLS);
-        break;
-    default:
-        crt_buf[crt_pos ++] = c;     // write the character
-        break;
+    switch (c & 0xff) { // 判断字符类型，对换行，退格等字符将调整 cga 显示位置 pos；
+        case '\b':
+            if (crt_pos > 0) {
+                crt_pos --;
+                crt_buf[crt_pos] = (c & ~0xff) | ' ';
+            }
+            break;
+        case '\n':
+            crt_pos += CRT_COLS;
+        case '\r':
+            crt_pos -= (crt_pos % CRT_COLS);
+            break;
+        default:
+            crt_buf[crt_pos ++] = c;     // write the character
+            break;
     }
 
     // What is the purpose of this?
@@ -409,10 +413,12 @@ kbd_init(void) {
     pic_enable(IRQ_KBD);
 }
 
-/* cons_init - initializes the console devices */
+/* 
+ * 函数功能：初始化终端设备；
+ */
 void
 cons_init(void) {
-    cga_init();
+    cga_init();     
     serial_init();
     kbd_init();
     if (!serial_exists) {
@@ -420,12 +426,14 @@ cons_init(void) {
     }
 }
 
-/* cons_putc - print a single character @c to console devices */
+/* 
+ * 函数功能：打印一个单字符串 c 到终端设备中；
+ */
 void
 cons_putc(int c) {
-    lpt_putc(c);
-    cga_putc(c);
-    serial_putc(c);
+    lpt_putc(c);    
+    cga_putc(c);    // 
+    serial_putc(c); // 打印字符到串口；
 }
 
 /* *

@@ -1599,6 +1599,12 @@ kern_init(void){
 
 ### 2.11.2 初始化控制台
 
+[cprintf函数调用到屏幕(cga)输出流程分析](https://blog.csdn.net/old_memory/article/details/79927282)
+
+```
+
+```
+
 ### 2.11.3 初始化物理内存管理器
 
 ### 2.11.4 初始化中断控制器

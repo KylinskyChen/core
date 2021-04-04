@@ -112,6 +112,10 @@ printfmt(void (*putch)(int, void*), void *putdat, const char *fmt, ...) {
  *
  * Call this function if you are already dealing with a va_list.
  * Or you probably want printfmt() instead.
+ * 
+ * 它将根据 ANSI 标准解析字符串 fmt 的每个格式化输出字符，并解析变长参数 ap；
+ * 解析的结果包括输出对齐、站位、符号、字符等，它们输出会调用 putch()；
+ * 变长参数在 C 语言中使用最广泛的就是输出函数，处理它依赖于平台（编译器）的实现；
  * */
 void
 vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap) {

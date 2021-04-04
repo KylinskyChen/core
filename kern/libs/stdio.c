@@ -30,17 +30,15 @@ vcprintf(const char *fmt, va_list ap) {
     return cnt;
 }
 
-/* *
- * cprintf - formats a string and writes it to stdout
- *
- * The return value is the number of characters which would be
- * written to stdout.
- * */
+/* 
+ * 函数功能：格式化一个字符串同时将它写入标准输出；
+ * 备注信息：返回值为将要写入标准输出的字符数；
+ */
 int
 cprintf(const char *fmt, ...) {
     va_list ap;
     int cnt;
-    va_start(ap, fmt);
+    va_start(ap, fmt);          // 预处理可变长参数；
     cnt = vcprintf(fmt, ap);
     va_end(ap);
     return cnt;
