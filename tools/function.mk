@@ -1,5 +1,7 @@
 OBJPREFIX	:= __objs_
 
+# 二次拓展；
+# 为了使用二次扩展，必须在第一个 `prerequisite`之前， 用`.SECONDEXPANSION` 做一个标注。
 .SECONDEXPANSION:
 # -------------------- function begin --------------------
 

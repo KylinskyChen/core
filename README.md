@@ -51,6 +51,283 @@ qemu: $(UCOREIMG)
 
 这样，qemu 就将镜像驱动，运行起来了。
 
+### 2.1.1 Makefile
+
+#### 2.1.1.1 多目标与自动变量
+
+运行如下命令：
+
+```shell
+touch foo bar fun makefile
+```
+
+在Makefile中添加如下内容：
+
+```makefile
+all: obj1 obj2 obj3
+
+obj1 obj2 obj3: foo bar fun
+	@echo $^
+	@echo $<
+	@echo $(subst obj,text,$@)
+	@echo "\n"
+```
+
+运行`make`会得到如下结果。
+
+```shell
+foo bar fun
+foo
+text1
+
+
+foo bar fun
+foo
+text2
+
+
+foo bar fun
+foo
+text3
+```
+
+- `$^`：获取所有的依赖文件
+- `$<`：获取第一个依赖文件
+- `$@`：获取所有目标文件
+
+> `(subst obj,text,$@)`中，两个`,`之间不能有空格，即`text`前后不能有空格，否则，在替换的时候就会出现空格替换的情况。
+
+#### 2.1.1.2 后缀规则
+
+对于`.SUFFIXES: .c .S .h`表示的后缀规则，展开为`% : %.c`，`% : %.S`，`% : %.h`。
+
+即定义了 3 组默认的模式规则，相当于定义了自己的后缀列表。
+
+删除了默认的后缀列表（`.out, .a, .ln, .o, .c, .cc, .C, .p, .f, .F, .r, .y, .l, .s, .S, .mod, .sym, .def, .h, .info, .dvi, .tex, .texinfo, .texi, .txinfo, .w, .ch .web, .sh, .elc, .el`）。
+
+#### 2.1.1.3 Call 函数
+
+在`makefile`中写入如下内容：
+
+```makefile
+reverse = $(2) $(1)
+foo = $(call reverse,a,$(2))
+bar = $(call reverse,a,b)
+all:
+	@echo $(foo)
+	@echo $(bar)
+```
+
+输出结果如下。
+
+````
+a
+b a
+````
+
+对于没有给定的输入参数`$(2)`，默认为空字符串。
+
+#### 2.1.1.4 2 次拓展
+
+[make 如何读入 makefile](https://www.gnu.org/software/make/manual/html_node/Reading-Makefiles.html#Reading-Makefiles)
+
+[GNU Make 官方文档](https://www.gnu.org/software/make/manual/html_node/Secondary-Expansion.html)
+
+GNU Make 的二次扩展只能用于`依赖部分`。
+
+为了使用二次扩展，必须在第一个 `prerequisite`之前， 用`.SECONDEXPANSION` 做一个标注。
+
+`make` 的工作分为两个阶段 `read-in phase` 和 `target-update phase` 。
+
+每个阶段都会对变量做一次扩展，如下例所示。
+
+```makefile
+.SECONDEXPANSION:
+ONEVAR = onefile
+TWOVAR = twofile
+myfile: $(ONEVAR) $$(TWOVAR)
+```
+
+- 第 1 阶段完成后，结果为`myfile: onefile $(TWOVAR)` ；
+- 第 2 阶段，`onefile` 扩展后不引用任何变量，仍然保留原值 `onfile` ，而后面一个扩展之后变成 `twofile`；
+- 最后结果为`myfile: onefile twofile`。
+
+再看下一个例子。
+
+```makefile
+.SECONDEXPANSION:
+AVAR = top
+onefile: $(AVAR)
+twofile: $$(AVAR)
+AVAR = bottom
+```
+
+- 在第 1 次扩展时，按照顺序，`onefile` 会被立即扩展为 `top`；
+- 在第 2 次扩展阶段，由于 `AVAR` 的值在第一阶段被复写了，因此 `twofile` 的值被扩展为 `bottom`。
+
+再看下面一个例子。
+
+```makefile
+.SECONDEXPANSION:
+main_OBJS := main.o try.o test.o
+lib_OBJS := lib.o api.o
+
+main lib: $$($$@_OBJS)
+```
+
+- 在第 1 次扩展后，结果为 `man lib: $($@_OBJS)`；
+- 在第 2 次扩展时，`$@` 被设置为`man lib` 值，所以扩展之后会变成 `man: $(main_OBJS) ` 和 `lib: $(lib_OBJS)`。
+
+将上面的例子再变化一下。
+
+```makefile
+main_SRCS := main.c try.c test.c
+lib_SRCS := lib.c api.c
+
+.SECONDEXPANSION:
+main lib: $$(patsubst %.c,%.o,$$($$@_SRCS))
+```
+
+在二次扩展中，只有 `$$@ / $$^ / $$<` 可以使用，而 `$$* / $$?` 是不能使用的。
+
+看下面的一个模式，在 `command` 模块里是不支持二次扩展的。
+
+```makfile
+file = /home/monster/Downloads
+
+.SECONDEXPANSION:
+
+define second
+foo: $(1)
+	@echo ---------------
+	@echo $$(dir $$<)
+	@echo $$$$(dir $$$$^)	
+	@echo ---------------
+endef
+
+define first
+$$(eval $$(call second, $(1)))
+endef
+
+$(info $(call second, $(file)))
+$(info $(call first, $(file)))
+$(eval $(call first, $(file)))
+```
+
+输出结果为：
+
+```shell
+foo:  /home/monster/Downloads
+	@echo ---------------
+	@echo $(dir $<)
+	@echo $$(dir $$^)	
+	@echo ---------------
+$(eval $(call second,  /home/monster/Downloads))
+---------------
+/home/monster/
+dir: cannot access '$^': No such file or directory
+```
+
+- 第 1 个执行的是 `echo /home/monster`；
+- 第 2 个执行的是 `echo $(dir $^)`；
+- 因此就会出现下面的错误提示；
+- 注意：执行是在 shell 里面执行的。
+
+多个美元符号的解释。
+
+```makefile
+DOLLAR:=$$
+FOUR := $$$$
+dollar:
+	echo '$$'  >  $@
+	echo "\$$" >> $@
+	echo '$(DOLLAR)'  >> $@
+	echo "\$(DOLLAR)" >> $@
+	echo $(DOLLAR) >> $@
+	echo $$(DOLLAR) >> $@
+	echo $(FOUR)
+	cat dollar
+```
+
+运行结果为：
+
+```shell
+echo '$'  >  dollar
+echo "\$" >> dollar
+echo '$'  >> dollar
+echo "\$" >> dollar
+echo $ >> dollar
+echo $(DOLLAR) >> dollar
+/bin/sh: 1: DOLLAR: not found
+echo $$
+9879
+cat dollar
+$
+$
+$
+$
+$
+
+```
+
+看一下下面这个例子。
+
+```makefile
+SLASH = /
+all: foo.c boo.c poo.c
+
+foo.c: bar | $(shell echo $(dir $(basename $@)$(SLASH)))
+	@echo $^
+	@echo $(basename $@)
+
+boo.c: bar $(shell echo $(dir $(basename $@)$(SLASH)))
+	@echo $^
+	@echo $(basename $@)
+
+poo.c: bar $(echo $(dir $(basename $@)$(SLASH)))
+	@echo $^
+	@echo $(basename $@)
+```
+
+输出结果为：
+
+```shell
+bar
+foo
+bar /
+boo
+bar
+poo
+```
+
+可以看出 `Order-Only` 前提条件不会算作 `$^` 的依赖目标集。
+
+看下面情况。
+
+```makefile
+SLASH = /
+name = /home/monster/downloads
+/home/monster/foo.c: bar | $(shell echo $(dir $(basename $@)$(SLASH)))
+	@echo $^
+	@echo $(basename $@)
+	@echo $(dir $(basename $@)$(SLASH))
+	@echo $(dir $(name))
+```
+
+输出结果为：
+
+```shell
+bar
+/home/monster/foo
+/home/monster/foo/
+/home/monster/
+```
+
+- make 里面的`dir` 函数是取目录函数，即取出`name`中的最后一个`/`之前的所有部分，包括`/`；
+- shell 里面的`dir` 函数是列出一个目录下的内容，相当于`ls`。
+
+### 2.1.2 qemu
+
 ## 2.2 生成 ucore.img
 
 这里使用 `include` 导入了一个 mk 库，里面有一些工具函数可以使用。
@@ -975,6 +1252,17 @@ CPU 把中断向量作为 IDT 表项的索引，用来指出当中断发生时�
 
 如果这些检查失败，会产生一个一般保护异常（general-protection exception）。
 
+### 2.5.10 控制寄存器
+
+[intel 手册卷三 2.5 Control Registers]()
+
+- **CR0** — 包含系统控制标志，控制处理器的操作模式和状态；
+  - **PG**：当置位时，允许页表映射，否则不允许页表映射，此时所有线性地址被看做物理地址；
+- **CR1** — 保留；
+- **CR2** — 包含  page-fault 线性地址 （造成 page-fault 的线性地址）；
+- **CR3** — 包含页目录基址以及两个标志位；
+- **CR4** — 包含一组使能几个 CPU 扩展的标志位；
+
 ## 2.6 为什么不利用 BIOS 直接加载操作系统？
 
 1. 不同操作系统可能拥有不同的文件系统，BIOS无法编写所有文件系统的解析代码，所以将加载程序作为操作系统的一部分；
@@ -1731,6 +2019,433 @@ SECTIONS {
 }
 ```
 
+### 2.9.4 操作系统镜像文件 ucore.img 生成的步骤
+
+运行 `make "V="` 显示整个编译过程中的信息。
+
+```shell
+# 编译 init.c 文件，生成 init.o 
++ cc kern/init/init.c
+gcc -Ikern/init/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/init/init.c -o obj/kern/init/init.o
+
+# 编译 stdio.c 文件，生成 stdio.o
++ cc kern/libs/stdio.c
+gcc -Ikern/libs/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/libs/stdio.c -o obj/kern/libs/stdio.o
+
+# 编译 readline.c 文件，生成 readline.o
++ cc kern/libs/readline.c
+gcc -Ikern/libs/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/libs/readline.c -o obj/kern/libs/readline.o
+
+# 编译 panic.c 文件，生成 painc.o
++ cc kern/debug/panic.c
+gcc -Ikern/debug/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/debug/panic.c -o obj/kern/debug/panic.o
+
+# 编译 kdebug.c 文件，生成 kdebug.o
++ cc kern/debug/kdebug.c
+gcc -Ikern/debug/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/debug/kdebug.c -o obj/kern/debug/kdebug.o
+
+# 编译 kmonitor.c 文件，生成 kmonitor.o
++ cc kern/debug/kmonitor.c
+gcc -Ikern/debug/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/debug/kmonitor.c -o obj/kern/debug/kmonitor.o
+
+# 编译 clock.c 文件，生成 clock.o
++ cc kern/driver/clock.c
+gcc -Ikern/driver/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/driver/clock.c -o obj/kern/driver/clock.o
+
+# 编译 console.c 文件，生成 console.o
++ cc kern/driver/console.c
+gcc -Ikern/driver/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/driver/console.c -o obj/kern/driver/console.o
+
+# 编译 picirq.c 文件，生成 picirq.o
++ cc kern/driver/picirq.c
+gcc -Ikern/driver/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/driver/picirq.c -o obj/kern/driver/picirq.o
+
+# 编译 intr.c 文件，生成 intr.o
++ cc kern/driver/intr.c
+gcc -Ikern/driver/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/driver/intr.c -o obj/kern/driver/intr.o
+
+# 编译 trap.c 文件，生成 trap.o
++ cc kern/trap/trap.c
+gcc -Ikern/trap/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/trap/trap.c -o obj/kern/trap/trap.o
+
+# 编译 vectors.S 生成 vectors.o
++ cc kern/trap/vectors.S
+gcc -Ikern/trap/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/trap/vectors.S -o obj/kern/trap/vectors.o
+
+# 编译 trapentry.S 生成 trapentry.o
++ cc kern/trap/trapentry.S
+gcc -Ikern/trap/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/trap/trapentry.S -o obj/kern/trap/trapentry.o
+
+# 编译 pmm.c 生成 pmm.o
++ cc kern/mm/pmm.c
+gcc -Ikern/mm/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Ikern/debug/ -Ikern/driver/ -Ikern/trap/ -Ikern/mm/ -c kern/mm/pmm.c -o obj/kern/mm/pmm.o
+
+# 编译 string.c 生成 string.o
++ cc libs/string.c
+gcc -Ilibs/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/  -c libs/string.c -o obj/libs/string.o
+
+# 编译 printfmt.c 生成 printfmt.o
++ cc libs/printfmt.c
+gcc -Ilibs/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/  -c libs/printfmt.c -o obj/libs/printfmt.o
+
+# 链接生成的所有目标文件，并生成 kernel 二进制文件
++ ld bin/kernel
+ld -m    elf_i386 -nostdlib -T tools/kernel.ld -o bin/kernel  obj/kern/init/init.o obj/kern/libs/stdio.o obj/kern/libs/readline.o obj/kern/debug/panic.o obj/kern/debug/kdebug.o obj/kern/debug/kmonitor.o obj/kern/driver/clock.o obj/kern/driver/console.o obj/kern/driver/picirq.o obj/kern/driver/intr.o obj/kern/trap/trap.o obj/kern/trap/vectors.o obj/kern/trap/trapentry.o obj/kern/mm/pmm.o  obj/libs/string.o obj/libs/printfmt.o
+
+# 编译 bootasm.S / bootmain.c / sign.c / 
++ cc boot/bootasm.S
+gcc -Iboot/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Os -nostdinc -c boot/bootasm.S -o obj/boot/bootasm.o
++ cc boot/bootmain.c
+gcc -Iboot/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Os -nostdinc -c boot/bootmain.c -o obj/boot/bootmain.o
++ cc tools/sign.c
+gcc -Itools/ -g -Wall -O2 -c tools/sign.c -o obj/sign/tools/sign.o
+
+# 生成 sign 文件
+gcc -g -Wall -O2 obj/sign/tools/sign.o -o bin/sign
+
+# 链接生成 bootblock 二进制文件
++ ld bin/bootblock
+ld -m    elf_i386 -nostdlib -N -e start -Ttext 0x7C00 obj/boot/bootasm.o obj/boot/bootmain.o -o obj/bootblock.o
+'obj/bootblock.out' size: 488 bytes
+build 512 bytes boot sector: 'bin/bootblock' success!
+
+# 生成ucore.img 文件
+dd if=/dev/zero of=bin/ucore.img count=10000
+10000+0 records in
+10000+0 records out
+5120000 bytes (5.1 MB, 4.9 MiB) copied, 0.0242314 s, 211 MB/s
+dd if=bin/bootblock of=bin/ucore.img conv=notrunc
+1+0 records in
+1+0 records out
+512 bytes copied, 9.9196e-05 s, 5.2 MB/s
+dd if=bin/kernel of=bin/ucore.img seek=1 conv=notrunc
+146+1 records in
+146+1 records out
+74828 bytes (75 kB, 73 KiB) copied, 0.000607019 s, 123 MB/s
+```
+
+### 2.9.5 gcc 编译选项详解
+
+[编译选项](https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html#C-Dialect-Options)
+
+| 编译选项                |                             含义                              |
+| :--------------------- | :----------------------------------------------------------: |
+| `-I`                   | 指定库文件包含路径（① 指定值 ② 环境变量 ③ 标准系统搜索路径） |
+| `-fno-builtin`         | 只识别以 `__builtin_`为前缀的 GCC 內建函数，禁用大多数內建函数，防止与其重名 |
+| `-Wall`                | 编译后显示所有[警告信息](https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#Warning-Options) |
+| `-ggdb`                | 使用 GDB 加入[调试信息](https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options) |
+| `-m32`                 | 生成 32位机器代码,`int long pointer` 都是 32 位，指定[x86处理器特定选项](https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html#x86-Options)， [处理器依赖选项](https://gcc.gnu.org/onlinedocs/gcc/Submodel-Options.html#Submodel-Options) |
+| `-gstabs`              |          产生 stabs 格式的调试信息，不包含 GDB 扩展          |
+| `-nostdinc`            | 不搜索标准系统目录的头文件，只搜索 `-I / -iquote / -isystem / -dirafter`指定的头文件， [目录选项](https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html#Directory-Options) |
+| `-fno-stack-protector` | 禁用堆栈保护机制，[工具选项](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html#Instrumentation-Options) |
+| `-c`                   | 编译或汇编源文件，但是不进行链接。将`.c/.i/.s`等后缀的文件编译成 `.o` 后缀。[输出类型控制](https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html#Overall-Options) |
+| `-O`                   | 优化生成的代码，`-Os` 仅仅是优化生成代码的大小，它开启了所有的`-O2`优化选项，除了那些会使代码尺寸增大的选项。 [优化选项](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Optimize-Options) |
+
+### 2.9.6 ld 链接选项详解
+
+[链接选项](https://sourceware.org/binutils/docs-2.31/ld/Options.html#Options)
+
+| 编译选项                              |                             含义                             |
+| ------------------------------------- | :----------------------------------------------------------: |
+| `-m`                                  | 指定生成文件的格式，默认使用 `LDEMULATION`环境变量，如果没有这个环境变量，则依赖与linker 的默认配置。通过 `ld -V` 可以查看它支持的 `emulation`。 |
+| `-nostdlib`                           | 只搜索命令行中显示制定的库目录，链接脚本里面制定的目录被忽略，包括命令行中制定的链接脚本。 |
+| `-N`                                  | 设置 `text and data section` 可读写，数据段不进行页对其，不链接动态链接库 |
+| `-e entry`                            |       指定程序开始执行的入口函数，而不是默认的入口点。       |
+| `-Tbss=org / -Tdata=org / -Ttext=org` |    通过 `org` 制定一个 `section` 在输出文件中的绝对地址。    |
+|                                       |                                                              |
+
+### 2.9.7 dd 磁盘维护命令详解
+
+[磁盘维护命令](http://www.runoob.com/linux/linux-comm-dd.html)
+
+Linux dd 命令用于读取、转换并输出数据。
+
+dd 可从标准输入或文件中读取数据，根据指定的格式来转换数据，再输出到文件、设备或标准输出。
+
+- if = 文件名：输入文件名，缺省为标准输入。
+- of = 文件名：输出文件名，缺省为标准输出。
+  - ibs = bytes：一次读入bytes个字节，即指定一个块大小为bytes个字节。（默认 512 字节）
+  - obs = bytes：一次输出bytes个字节，即指定一个块大小为bytes个字节。（默认 512 字节）
+  - bs = bytes：同时设置读入/输出的块大小为bytes个字节。
+  - cbs = bytes：一次转换bytes个字节，即指定转换缓冲区大小。
+- skip = blocks：从输入文件开头跳过blocks个块后再开始复制。
+- seek = blocks：从输出文件开头跳过blocks个块后再开始复制。
+- count = blocks：仅拷贝blocks个块，块大小等于ibs指定的字节数。
+- conv = <关键字>，关键字可以有以下11种：
+  - conversion：用指定的参数转换文件。
+  - ascii：转换ebcdic为ascii
+  - ebcdic：转换ascii为ebcdic
+  - ibm：转换ascii为alternate ebcdic
+  - block：把每一行转换为长度为cbs，不足部分用空格填充
+  - unblock：使每一行的长度都为cbs，不足部分用空格填充
+  - lcase：把大写字符转换为小写字符
+  - ucase：把小写字符转换为大写字符
+  - swab：交换输入的每对字节
+  - noerror：出错时不停止
+  - notrunc：不截短输出文件
+  - sync：将每个输入块填充到ibs个字节，不足部分用空（NUL）字符补齐。
+
+> N and BYTES may be followed by the following multiplicative suffixes:
+> c =1, w =2, b =512, kB =1000, K =1024, MB =1000*1000, M =1024*1024, xM =M
+> GB =1000*1000*1000, G =1024*1024*1024, and so on for T, P, E, Z, Y.
+
+### 2.9.8 输入输出重定向
+
+对于输出重定向，`2` 和 `>` 之间 **不能有空格**。
+
+```shell
+i386-elf-objdump -i 2 > test
+cat test
+```
+
+上述结果输出为空。
+
+```shell
+i386-elf-objdump -i 2> test
+cat test
+#或者
+i386-elf-objdump -i 2>test
+cat test
+```
+
+上述输出结果为`i386-elf-objdump: command not found`
+
+### 2.9.9 2>&1 和 1>&2
+
+运行下列代码，可以看出区别：
+
+- 2 表示 stderr；
+- 1 表示 stdout。
+
+```
+i386-elf-objdump -i >test 2>&1
+cat test
+### 输出结果为：i386-elf-objdump: command not found
+
+i386-elf-objdump -i >test 1>&2
+cat test
+### 输出结果为：<空>
+```
+
+- `2>&1`：表示将 `1` 的结果合并到 `2` 里面；
+- `1>&2`：表示讲 `2` 的结果合并到 `1` 里面。
+
+### 2.9.10 Makefile 的函数
+
+#### 2.9.10.1 value 函数
+
+`value` 函数提供了一种在不对变量进行展开的情况下获取变量值的方法。
+
+> 语法：`$(value VARIABLE)`
+> 功能：**不对变量 `VARIABLE` 进行任何展开操作**，直接返回变量 `VARIABLE` 的值。返回 `VARIABLE` 的值，它是一个变量名，一般不包含 `$` （除非计算的变量名）。
+> 返回值：变量 `VARIABLE` 定义的文本值。
+
+示例如下。
+
+```makefile
+FOO = $PATH
+BAR = $(PATH)
+
+first_second = Hello
+a = first
+b = second
+c = $($a_$b)
+
+all:
+	@echo "1: $(FOO)"
+	@echo "2: $(value FOO)"
+	@echo "3: $(BAR)"
+	@echo "4: $(value FOO)"
+	@echo "5: $(c)"
+	echo $(value c)
+	$(info $(value FOO))
+```
+
+输出结果为：
+
+```shell
+1: ATH
+2: /home/monster/bin:/home/monster/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+3: /home/monster/bin:/home/monster/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+4: /home/monster/bin:/home/monster/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+5: Hello
+echo $($a_$b)
+$PATH
+```
+
+第 1 行为：`ATH`。这是因为变量 `FOO` 定义为 `$PATH`，所以展开为 `ATH` （ `$P` 为空）。
+
+第 2 行才是我们需要显示的系统环境变量 `PATH` 的值（value 函数得到变量 `FOO` 的值为 `$PATH`）。
+
+#### 2.9.10.2 eval 函数
+
+函数 `eval` 会对它的参数进行展开，展开的结果可以包含一个新变量、目标、隐含规则或者明确规则，展开结果作为 `makefile` 的一部分。
+
+此函数的主要功能是根据其参数的关系、结构，对它们进行替换展开。
+
+eval 函数执行时会对它的参数进行 2 次展开。
+
+- 第 1 次展开过程是由 **函数本身完成** 的；
+- 第 2 次是函数展开后的结果被作为 Makefile 内容时由 **make解析时展开** 的。
+
+明确这一过程对于使用 eval 函数非常重要。
+
+理解了函数 eval 二次展开的过程后，实际使用时，如果在函数的展开结果中存在引用（格式为：\$(x)），那么在函数的参数中应该使用 $$ 来代替 $。
+
+因为这一点，所以通常它的参数中会 **使用函数 value 来取一个变量的文本值**。（文本值 vs 展开值）
+
+示例如下。
+
+```makefile
+OBJ=a.o b.o c.o d.o main.o
+
+define MA
+main:$(OBJ)
+	gcc -g -o main $$(OBJ)
+endef
+
+$(info $(call MA))
+$(eval $(call MA))
+```
+
+运行如下命令。
+
+```shell
+touch a.c b.c c.c d.c main.c
+make
+```
+
+得到如下结果。
+
+```shell
+main:a.o b.o c.o d.o main.o
+	gcc  -g -o main $(OBJ)
+
+cc    -c -o a.o a.c
+cc    -c -o b.o b.c
+cc    -c -o c.o c.c
+cc    -c -o d.o d.c
+cc    -c -o main.o main.c
+
+gcc  -g -o main a.o b.o c.o d.o main.o
+# 忽略后面的错误提示
+```
+
+从结果看出，第 1 次执行调用展开，在整个 makefile 调用代码中去掉了一个 `$` （即全部都进行了 1 次展开）。
+
+接着看下面一个示例。
+
+```makefile
+pointer := pointed_value
+
+define foo 
+var := 123
+arg := $1
+$$($1) := ooooo
+endef 
+  
+$(info $(call foo,pointer))
+#$(eval $(call foo,pointer))
+ 
+target:
+	@echo -----------------------------
+	@echo var: $(var), arg: $(arg)
+	@echo pointer: $(pointer), pointed_value: $(pointed_value)
+	@echo done.
+	@echo -----------------------------
+```
+
+> 注意 `target` 下面的命令必须使用 `Tab` 开始，不能有空格开始，否则，由于里面有 `:`，在运行 `make` 的时候会提示 `*** multiple target patterns.  Stop.`
+
+运行结果如下。
+
+```shell
+var := 123
+arg := pointer
+$(pointer) := ooooo
+-----------------------------
+var: , arg:
+pointer: pointed_value, pointed_value:
+done.
+-----------------------------
+```
+
+`info` 函数只是将 `$(call foo,pointer)` 的返回值，也就是替换后的代码段，打印到标准输出，而并没有执行代码段，因此上述的各个值均为空。
+
+`$(call foo, pointer)` 就是 makefile 对`foo`函数进行第一次求值，求值结果仍然是 makefile 代码段。
+
+那么问题就来了，**既然求值出来的结果还是 Makefile 代码，那这段代码又要怎么运行呢？答案就是再包一个 eval, 所以 eval 就是第二次求值了**。
+
+将上面的注释信息进行调整（注释掉 `info`，取消 `eval` 的注释），可以看到如下结果：
+
+```shell
+-----------------------------
+var: 123, arg: pointer
+pointer: pointed_value, pointed_value: ooooo
+done.
+-----------------------------
+```
+
+> 说明：在makefile中，一个 `$()` 表示引用变量里面的值，而 `$$` 表示的是一个单独的 `$` 符号。可以看成序列 `$1`，`$2`，`$3`...`$$`，相当于转义字符。
+
+### 2.9.11 Order-Only 前提条件
+
+makefile 中的生成规则格式为：
+
+```makefile
+target : normal-prerequisites | order-only-prerequisites
+[TAB]command1
+[TAB]command2
+[TAB]...
+[TAB]commandN
+```
+
+正常前提条件的作用如下。
+
+- 在 `target` 目标下的命令被执行前，所有 `正常前提条件` 的生成命令都需要被执行；
+- 任何一个前提目标 `normal-prerequisites` 比生成目标 `target` 新时，生成目标都被认为太旧而需要被重新生成。
+
+命令前提条件的作用：
+
+- 执行某个或某些规则，不引起生成目标被重新生成。
+
+示例如下：
+
+```makefile
+LIBS=lib.c
+foo: foo.c | $(LIBS)
+	touch foo
+	@echo "order"
+```
+
+运行如下过程：
+
+```shell
+touch foo.c lib.c
+make
+vim lib.c #修改 lib.c 的内容
+make
+vim foo.c #修改 foo.c 的内容
+make
+```
+
+会得到如下结果：
+
+```shell
+---第一次make---
+touch foo
+order
+
+---第二次make---
+make: 'foo' is up to date.
+
+---第三次make---
+touch foo
+order
+```
+
+可以看到 `lib.c` 的修改不会影响 `foo` 的重新生成。
+
 ## 2.10 基本 kernel 的启动过程
 
 当 bootloader 通过读取硬盘扇区把 ucore 在系统加载到内存后，就转跳到 ucore 操作系统在内存中的入口位置（`kern/init.c` 中的 `kern_init` 函数的起始地址），这样 `ucore` 就接管了整个系统控制权。
@@ -1763,6 +2478,213 @@ ds 寄存器作为段选择子去 GDT 找到对应的段描述符。
 在 lab1 中，未开启分页，数据段描述符的 base 是0，0 加上 offset（虚拟地址）等于线性地址，所以虚拟地址 = 物理地址。
 
 现在已经开启了段寻址，而且虚拟地址 = 线性地址 = 物理地址。
+
+### 2.10.1 从 CPU 加电后执行的第 1 条指令开始单步跟踪 BIOS 的执行
+
+```
+make debug-nox
+i r
+x /2i 0xffff0 （CS:IP = 0xffff0
+x /10i 0xfe05b (0xfe05b是BIOS跳转的地址)
+```
+
+指令 `i r` 的结果如下。
+
+```shell
+0x0000fff0 in ?? ()
+(gdb) i r
+eax            0x0	0
+ecx            0x0	0
+edx            0x663	1635
+ebx            0x0	0
+esp            0x0	0x0
+ebp            0x0	0x0
+esi            0x0	0
+edi            0x0	0
+eip            0xfff0	0xfff0
+eflags         0x2	[ ]
+cs             0xf000	61440
+ss             0x0	0
+ds             0x0	0
+es             0x0	0
+fs             0x0	0
+gs             0x0	0
+(gdb) x /2i 0xffff0
+   0xffff0:	ljmp   $0x3630,$0xf000e05b
+   0xffff7:	das  
+   (gdb) x /10i 0xfe05b
+   0xfe05b:	cmpw   $0xffa4,%cs:(%esi)
+   0xfe060:	add    %cl,%gs:(%edi)
+   0xfe063:	test   %edx,-0xe(%ebx)
+   0xfe066:	xor    %eax,%eax
+   0xfe068:	mov    %eax,%ss
+   0xfe06a:	mov    $0x7000,%sp
+   0xfe06e:	add    %al,(%eax)
+   0xfe070:	mov    $0x3c4f,%dx
+   0xfe074:	verw   %cx
+   0xfe077:	mov    $0xf0,%cl
+```
+
+BIOS 里面的代码没啥好看的，都是写上电自检等硬件相关的例程，不需要过多关心。
+
+### 2.10.2 在初始化位置 0x7c00 设置实地址断点来测试
+
+`tools/gdbinit` 中的内容修改如下。
+
+```gdb
+file bin/kernel
+target remote :1234
+set architecture i8086
+b *0x7c00
+continue
+x /2i $pc
+```
+
+运行 `make debug-nox` 调试，结果如下。
+
+```gdb
+Breakpoint 1, 0x00007c00 in ?? ()
+=> 0x7c00:	cli    
+   0x7c01:	cld  
+```
+
+### 2.10.3 从 0x7c00 开始跟踪代码运行，将单步跟踪反汇编得到的代码与 bootasm.S 和 bootblock.asm 进行比较
+
+运行 `make debug-nox`，执行 `x /32i $pc` 查看 pc 指针的数据。
+
+```gdb
+(gdb) x /32i $pc
+=> 0x7c00:	cli    
+   0x7c01:	cld    
+   0x7c02:	xor    %ax,%ax
+   0x7c04:	mov    %ax,%ds
+   0x7c06:	mov    %ax,%es
+   0x7c08:	mov    %ax,%ss
+   0x7c0a:	in     $0x64,%al
+   0x7c0c:	test   $0x2,%al
+   0x7c0e:	jne    0x7c0a
+   0x7c10:	mov    $0xd1,%al
+   0x7c12:	out    %al,$0x64
+   0x7c14:	in     $0x64,%al
+   0x7c16:	test   $0x2,%al
+   0x7c18:	jne    0x7c14
+   0x7c1a:	mov    $0xdf,%al
+   0x7c1c:	out    %al,$0x60
+   0x7c1e:	lgdtw  0x7c6c
+   0x7c23:	mov    %cr0,%eax
+   0x7c26:	or     $0x1,%eax
+   0x7c2a:	mov    %eax,%cr0
+   0x7c2d:	ljmp   $0x8,$0x7c32
+   0x7c32:	mov    $0xd88e0010,%eax
+   0x7c38:	mov    %ax,%es
+   0x7c3a:	mov    %ax,%fs
+   0x7c3c:	mov    %ax,%gs
+   0x7c3e:	mov    %ax,%ss
+   0x7c40:	mov    $0x0,%bp
+   0x7c43:	add    %al,(%bx,%si)
+   0x7c45:	mov    $0x7c00,%sp
+   0x7c48:	add    %al,(%bx,%si)
+   0x7c4a:	call   0x7cfe
+   0x7c4d:	add    %al,(%bx,%si)
+
+```
+
+看到 `call bootmain` 对应的汇编代码如下。
+
+```gdb
+   0x7c4a:	call   0x7cfe
+```
+
+设置断点并继续执行，跳转到 `bootmain` 的执行代码。
+
+```gdb
+(gdb) b *0x7c4a
+Breakpoint 2 at 0x7c4a
+(gdb) c
+Continuing.
+
+Breakpoint 2, 0x00007c4a in ?? ()
+(gdb) x /2i $pc
+=> 0x7c4a:	call   0x7cfe
+   0x7c4d:	add    %al,(%bx,%si)
+```
+
+把磁盘的前 4K 字节读入 0x10000 位置处，磁盘对应 ucore.img。
+
+这前 4K 个字节包含了 ELF 头部。
+
+然后执行 ELF 头部所指示的入口点（通过 `readelf -eW kernel` 可以查看 ucore.img 的入口点）。
+
+```bash
+moocos-> readelf -eW kernel
+ELF Header:
+  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF32
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Intel 80386
+  Version:                           0x1
+  Entry point address:               0x100000
+  Start of program headers:          52 (bytes into file)
+  Start of section headers:          64136 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               52 (bytes)
+  Size of program headers:           32 (bytes)
+  Number of program headers:         3
+  Size of section headers:           40 (bytes)
+  Number of section headers:         11
+  Section header string table index: 8
+
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        00100000 001000 003572 00  AX  0   0  1
+  [ 2] .rodata           PROGBITS        00103580 004580 00090c 00   A  0   0 32
+  [ 3] .stab             PROGBITS        00103e8c 004e8c 00780d 0c   A  4   0  4
+  [ 4] .stabstr          STRTAB          0010b699 00c699 002010 00   A  0   0  1
+  [ 5] .data             PROGBITS        0010e000 00f000 000a16 00  WA  0   0 32
+  [ 6] .bss              NOBITS          0010ea20 00fa16 001360 00  WA  0   0 32
+  [ 7] .comment          PROGBITS        00000000 00fa16 000024 01  MS  0   0  1
+  [ 8] .shstrtab         STRTAB          00000000 00fa3a 00004c 00      0   0  1
+  [ 9] .symtab           SYMTAB          00000000 00fc40 001950 10     10  81  4
+  [10] .strtab           STRTAB          00000000 011590 000f1b 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings)
+  I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)
+  O (extra OS processing required) o (OS specific), p (processor specific)
+
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x001000 0x00100000 0x00100000 0x0d6a9 0x0d6a9 R E 0x1000
+  LOAD           0x00f000 0x0010e000 0x0010e000 0x00a16 0x01d80 RW  0x1000
+  GNU_STACK      0x000000 0x00000000 0x00000000 0x00000 0x00000 RWE 0x10
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text .rodata .stab .stabstr 
+   01     .data .bss 
+   02     
+```
+
+之后程序就跳转到地址 0x100000 处执行。
+
+> 注意：ucore.img 加载的位置是 0x1 0000，程序跳转执行的位置是 0x10 0000。
+
+然后 `b *0x100000` 和 `c` 就可以看到程序跳转到内核初始化的代码部分了，至此，内核执行前的准备工作已经全部完成。
+
+即：禁用中断，设置数据段寄存器，使能A20引脚，加载 GDT，进入保护模式，跳转到 bootmain，读取 ELF 头头部，跳转到内核初始化代码处。
+
+### 2.10.4 内初初始化的操作逻辑
+
+在 `tools/kernel.ld` 文件中定义了内核的各个段的分布情况。
+
+1. 数据段之后的所有内容全部用 0 填充，即 `.bss` 段；
+2. 初始化控制台；
+3. 打印欢迎信息；
+4. 打印内核信息。
 
 ## 2.11 基本 kernel 的实现
 
@@ -1895,6 +2817,101 @@ pmm_init(void) {
         - 跳过栈中的 trap_no 与 error_code，使 esp 指向中断返回 eip；
         - 通过 iret 调用恢复 cs、eflag 以及 eip，继续执行。
 
+### 2.11.5 x86.h
+
+[内联汇编官网](https://gcc.gnu.org/onlinedocs/gcc/Machine-Constraints.html#Machine-Constraints)
+
+在 `内联汇编官网` 搜索 x86，然后就能看到关于 `"A"` 约束的描述。
+
+- 表示 eax 和 ebx 寄存器对，用来返回双字结果；
+- 如果是单字的话，那么就会被随机分配到 eax 或者 ebx 中。
+
+#### 2.11.5.1 do_div(n, base)
+
+- `div val` 指令将 `ax, ax:ax, edx:eax, rdx:rax` 中存储的数除以`val`，并将结果存储在 `ax, ax:ax, edx:eax, rdx:rax` 中；
+  - 商存在 rax 中，余数存在 rdx 中；
+  - `val` 的字节数对应使用何种寄存器；
+    - 例如 64 字节，则使用 rdx 和 rax。
+
+代码的整体结构如下。
+
+```assembly
+#define do_div(n, base) ({                                        \
+    unsigned long __upper, __low, __high, __mod, __base;        \
+    __base = (base);                                            \
+    asm("" : "=a" (__low), "=d" (__high) : "A" (n));            \
+    __upper = __high;                                            \
+    if (__high != 0) {                                            \
+        __upper = __high % __base;                                \
+        __high = __high / __base;                                \
+    }                                                            \
+    asm("divl %2" : "=a" (__low), "=d" (__mod)                    \
+        : "rm" (__base), "0" (__low), "1" (__upper));            \
+    asm("" : "=A" (n) : "a" (__low), "d" (__high));                \
+    __mod;                                                        \
+})                                       \
+```
+
+上面一整段的操作逻辑就是：`n / base ` 商存在`n` 中，余数存在 `mod` 中，并返回 `mod`。
+
+
+#### 2.11.5.2 inb(unint16_t port)
+
+从16位端口 port 读取 1 个字节存放到 data 中。
+
+#### 2.11.5.3 insl(unit32_t port, void *addr, int cnt)
+
+- **cld**：DF 置 0，ESI 或者 EDI 自增；
+
+- The REP (repeat)
+
+- REPE (repeat while equal)
+
+- REPNE (repeat while not equal)：重复执行一个字符串操作指令；
+
+- REPZ (repeat while zero)
+
+- REPNZ (repeat while not zero) ：ZF = 0 表示运算结果非 0，则一直执行，直到 ZF = 1；
+
+- **ins**：从指定的 I/O 端口读取到 ES:DI，ES:EDI 或者 RDI 及寄存器指定的内存地址；
+  - 端口号由 DX 寄存器制定；
+
+  - `"=D"` 表示 `edi` 约束；
+
+  - `"cc"` 表示汇编代码会修改标志寄存器；
+
+  - `"memory"` 表示汇编代码对输入和输出操作数中列出的项以外的项执行内存读取或写入操作（例如，访问其中一个输入参数指向的内存）；
+    - 为确保内存包含正确的值，GCC 可能需要在执行 asm 之前将特定的寄存器值刷新到内存中；
+    - 此外，编译器不会假定在 asm 执行前，从内存读取的数据会在 asm 执行后仍然保持不变；
+    - 它会根据需要重新加载它们；
+    - 使用 memory clobber 有效地形成了编译器的读/写内存屏障；
+    - 将寄存器的值刷到内存会对性能产生影响；
+    - memory clobber 使得 GCC 认为任何内存都可以由 asm 块任意读取或写入，因此会阻止编译器重新排序加载或存储在其中。
+
+> 不管是编译器重排指令，还是 CPU 乱序处理，都要遵守一个最基本的原则：”不能违反指令之间的依赖“，即有依赖的指令之间是不能够重排或乱序的。
+
+简单来说，memory 就是告诉编译器，这段汇编代码段我修改了内存，所以这段汇编代码前面的指令不能乱序到后面执行，后面的指令不能乱序到前面执行，就相当于一个内存屏障一样。
+
+主要是防止 `-fschedule-insns` 优化时做代码重排。
+
+从 32 位端口 port 读取 cnt 个字节到 addr 指向的内存区域。
+
+#### 2.11.5.4 sti
+
+设置中断标志位 IF，允许处理器响应可屏蔽硬件中断。
+
+#### 2.11.5.5 cli
+
+清除中断标志位 IF，使得处理器忽略可屏蔽外部中断。
+
+- 这两个指令只能在内核模式下执行，不可以在用户模式下执行；
+- 而且在内核模式下执行时，应该尽可能快的恢复中断，因为 CLI 会禁用硬件中断；
+- 若长时间禁止中断会影响其他动作的执行（如移动鼠标等等），系统就会变得不稳定；
+- 在标志寄存器中中断标志清零的情况下，可以以 int ×× 的形式调用软中断。
+
+#### 2.11.5.6 ltr
+
+加载任务寄存器。
 
 
 
@@ -1902,6 +2919,23 @@ pmm_init(void) {
 
 
 
+
+
+$$
+\left\{
+    \begin{array}{}
+        n = x:y; \\
+    \_high = x; \\
+    \_low = y; \\
+    \_base = b; \\
+    \_upper = u;
+    \end{array}
+\right.\\
+u =  x \% b; \\
+x = x / b; \\
+u:y / b ==> 商给 \_low, 余数给 \_mod
+x:\_low 组成了商，\_mod形成了余数。
+$$
 
 
 

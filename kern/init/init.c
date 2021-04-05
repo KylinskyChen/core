@@ -125,6 +125,12 @@ lab1_print_cur_status(void) {
 
 static void
 lab1_switch_to_user(void) {
+
+// 调用 T_SWITCH_TOU 中断；
+
+// 注意：从中断返回时，会多 pop 2 位，用这两位的值更新 ss、sp，损坏堆栈；
+//      所以要先把栈压 2 位，并在从中断返回后修复 esp；
+
     //LAB1 CHALLENGE 1 : TODO
 	asm volatile (
 	    "sub $0x8, %%esp \n"
@@ -137,6 +143,9 @@ lab1_switch_to_user(void) {
 
 static void
 lab1_switch_to_kernel(void) {
+
+// 注意从中断返回时，esp 仍在 TSS 指示的堆栈中，所以要在从中断返回后修复 esp；
+
     //LAB1 CHALLENGE 1 :  TODO
 	asm volatile (
 	    "int %0 \n"

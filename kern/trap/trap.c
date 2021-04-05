@@ -61,8 +61,11 @@ idt_init(void) {
     for (i = 0; i < sizeof(idt) / sizeof(struct gatedesc); i ++) {
         SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
     }
-	// set for switch from user to kernel
+
+    // 将用户态调用 SWITCH_TOK 中断的权限打开；
+    // SETGATE(idt[T_SWITCH_TOK], 1, KERNEL_CS, __vectors[T_SWITCH_TOK], 3);
     SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+
 	// load the IDT
     lidt(&idt_pd);
 }
@@ -159,6 +162,22 @@ struct trapframe switchk2u, *switchu2k;
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
 trap_dispatch(struct trapframe *tf) {
+
+// 将 iret 时会从堆栈弹出的段寄存器进行修改；
+// 
+// 	对TO User
+// 
+// 	    tf->tf_cs = USER_CS;
+// 	    tf->tf_ds = USER_DS;
+// 	    tf->tf_es = USER_DS;
+// 	    tf->tf_ss = USER_DS;
+// 
+// 	对TO Kernel
+// 
+// 	    tf->tf_cs = KERNEL_CS;
+// 	    tf->tf_ds = KERNEL_DS;
+// 	    tf->tf_es = KERNEL_DS;
+
     char c;
 
     switch (tf->tf_trapno) {
@@ -192,6 +211,9 @@ trap_dispatch(struct trapframe *tf) {
 		
             // set eflags, make sure ucore can use io under user mode.
             // if CPL > IOPL, then cpu will generate a general protection.
+            
+            // 但这样不能正常输出文本；
+            // 根据提示，在 trap_dispatch 中转 User 态时，将调用 io 所需权限降低；
             switchk2u.tf_eflags |= FL_IOPL_MASK;
 		
             // set temporary stack
