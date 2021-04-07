@@ -37,18 +37,21 @@ kern_init(void){
     pmm_init();
 
     // 初始化中断控制器；
+    // 当一个外设产生中断后，中断控制器会将中断产生一个对应的中断号，传给 cpu 去处理；
     pic_init();                
     // 初始化中断描述符表；
     idt_init();
 
-    // 初始化定时芯片；
+    // 初始化时钟中断；
     clock_init();
-    // 开中断；
+    // 开中断，使能中断，真正产生中断的地方；
     intr_enable();              
 
     //LAB1: CAHLLENGE 1 If you try to do it, uncomment lab1_switch_test()
     // user/kernel mode switch test
-    // lab1_switch_test();
+    // 从内核态能跳到用户态，再从用户态通过系统调用，跳到内核态；
+    // 1 个好问题：如何构造一个用户态的运行环境？
+    lab1_switch_test();
 
     // 阻塞，避免内核程序退出。通过监听中断事件进行服务；
     while (1);
@@ -115,7 +118,9 @@ lab1_print_cur_status(void) {
             "mov %%es, %2;"
             "mov %%ss, %3;"
             : "=m"(reg1), "=m"(reg2), "=m"(reg3), "=m"(reg4));
-    cprintf("%d: @ring %d\n", round, reg1 & 3);
+    cprintf("%d: @ring %d\n", round, reg1 & 3); // 将 cs 的值赋值给 reg；
+                                                // 如果 cs 为 00 则在内核态；
+                                                //     cs 为 11 则为用户态；
     cprintf("%d:  cs = %x\n", round, reg1);
     cprintf("%d:  ds = %x\n", round, reg2);
     cprintf("%d:  es = %x\n", round, reg3);
@@ -139,6 +144,7 @@ lab1_switch_to_user(void) {
 	    : 
 	    : "i"(T_SWITCH_TOU)
 	);
+    // 进入 T_SWITCH_TOU 中断；
 }
 
 static void
@@ -159,10 +165,14 @@ static void
 lab1_switch_test(void) {
     lab1_print_cur_status();
     cprintf("+++ switch to  user  mode +++\n");
+    // 内核切用户态；
     lab1_switch_to_user();
+    // 打印当前状态；
     lab1_print_cur_status();
     cprintf("+++ switch to kernel mode +++\n");
+    // 用户态切内核态；
     lab1_switch_to_kernel();
+    // 打印当前状态；
     lab1_print_cur_status();
 }
 

@@ -59,8 +59,12 @@ struct pushregs {
     uint32_t reg_eax;
 };
 
+// trapframe 存储的信息：
+// 产生一个中断之后，硬件和软件要处理哪些东西？
+// 中断处理完毕之后，需要恢复哪些信息？
 struct trapframe {
     struct pushregs tf_regs;
+    // 软件帮我们保存的内容；
     uint16_t tf_gs;
     uint16_t tf_padding0;
     uint16_t tf_fs;
@@ -71,12 +75,14 @@ struct trapframe {
     uint16_t tf_padding3;
     uint32_t tf_trapno;
     /* below here defined by x86 hardware */
+    // 硬件需要保存的内容；
     uint32_t tf_err;
     uintptr_t tf_eip;
     uint16_t tf_cs;
     uint16_t tf_padding4;
     uint32_t tf_eflags;
     /* below here only when crossing rings, such as from user to kernel */
+    // 当用户态跳到内核态之后，硬件多保存的内容；
     uintptr_t tf_esp;
     uint16_t tf_ss;
     uint16_t tf_padding5;

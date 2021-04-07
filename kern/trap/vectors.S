@@ -1,4 +1,7 @@
 # handler
+# 用改文件生成 vctorss.S 的文件；
+# 中断的入口地址；
+
 .text
 .globl __alltraps
 .globl vector0

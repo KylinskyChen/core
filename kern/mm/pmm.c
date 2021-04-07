@@ -39,6 +39,11 @@ static struct taskstate ts = {0};
  *   - 0x20:  user data segment
  *   - 0x28:  defined for tss, initialized in gdt_init
  * */
+
+// 对 ucore 的段进行了重新了定义
+// 多了 3 项；
+// DPL_KERNEL 为用户态的特权级为 0；
+// DPL_USER   为内核态的特权级为 3；
 static struct segdesc gdt[] = {
     SEG_NULL,
     [SEG_KTEXT] = SEG(STA_X | STA_R, 0x0, 0xFFFFFFFF, DPL_KERNEL),
@@ -79,6 +84,10 @@ gdt_init(void) {
     // Setup a TSS so that we can get the right stack when we trap from
     // user to the kernel. But not safe here, it's only a temporary value,
     // it will be set to KSTACKTOP in lab2.
+    // 设定好 ts 之后，从用户态返回内核态时，内核态的堆栈信息保存在 ts 中；
+    // ts.ts_esp0、ts.ts_ss0 完成响应的处理；
+    // ts：task segment；
+    // ts 帮助完成 1 个内核栈的建立，使用户态切到内核态时，能够让 cpu 正确找到内核堆栈的位置；
     ts.ts_esp0 = (uint32_t)&stack0 + sizeof(stack0);
     ts.ts_ss0 = KERNEL_DS;
 
@@ -87,9 +96,11 @@ gdt_init(void) {
     gdt[SEG_TSS].sd_s = 0;
 
     // reload all segment registers
+    // 将新的 gdt 加载进内核并进行处理；
     lgdt(&gdt_pd);
 
     // load the TSS
+    // 加载 tss 的信息；
     ltr(GD_TSS);
 }
 

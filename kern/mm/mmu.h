@@ -64,11 +64,15 @@ struct gatedesc {
  * Set up a normal interrupt/trap gate descriptor
  *   - istrap: 1 for a trap (= exception) gate, 0 for an interrupt gate
  *   - sel: Code segment selector for interrupt/trap handler
+ *          选择子；
  *   - off: Offset in code segment for interrupt/trap handler
+ *          段表偏移；
  *   - dpl: Descriptor Privilege Level - the privilege level required
  *          for software to invoke this interrupt/trap gate explicitly
  *          using an int instruction.
  * */
+
+// 设置中断门中的某一项；
 #define SETGATE(gate, istrap, sel, off, dpl) {            \
     (gate).gd_off_15_0 = (uint32_t)(off) & 0xffff;        \
     (gate).gd_ss = (sel);                                \

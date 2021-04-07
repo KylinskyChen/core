@@ -51,6 +51,12 @@ qemu: $(UCOREIMG)
 
 这样，qemu 就将镜像驱动，运行起来了。
 
+```gdb
+set architecture i8086
+```
+
+将处理器状态设置为实模式。
+
 ### 2.1.1 Makefile
 
 #### 2.1.1.1 多目标与自动变量

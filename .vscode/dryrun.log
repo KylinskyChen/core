@@ -1,0 +1,7 @@
+make --dry-run --always-make --keep-going --print-directory
+make: 进入目录“/home/xiechen/14.core”
+ 
+mkdir -p obj/libs/
+gcc -Ilibs/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/  -MM libs/string.c -MT "obj/libs/string.o obj/libs/string.d"> obj/libs/string.d
+make: 离开目录“/home/xiechen/14.core”
+ 

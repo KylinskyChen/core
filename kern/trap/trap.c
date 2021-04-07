@@ -56,6 +56,8 @@ idt_init(void) {
     //      0-1 字节和 6-7 字节拼成位移，
     //      两者联合便是中断处理程序的入口地址。
 
+    // 从用户态，能够通过 1 个 int 中断号，来产生 1 个软中断，首先要将其设置好；
+
     extern uintptr_t __vectors[];
     int i;
     for (i = 0; i < sizeof(idt) / sizeof(struct gatedesc); i ++) {
@@ -65,8 +67,12 @@ idt_init(void) {
     // 将用户态调用 SWITCH_TOK 中断的权限打开；
     // SETGATE(idt[T_SWITCH_TOK], 1, KERNEL_CS, __vectors[T_SWITCH_TOK], 3);
     SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    // DPL_USER：允许在用户态时发出软中断，完成 1 个低优先级到高优先级的跳变；
+    // 通过一个特定的中断号 T_SWITCH_TOK 来完成；
+    // __vectors[T_SWITCH_TOK] 是中断的起始地址；
 
 	// load the IDT
+    // 加载中断向量表 IDT；
     lidt(&idt_pd);
 }
 
@@ -181,7 +187,8 @@ trap_dispatch(struct trapframe *tf) {
     char c;
 
     switch (tf->tf_trapno) {
-    case IRQ_OFFSET + IRQ_TIMER:
+    // 产生时钟中断；
+    case IRQ_OFFSET + IRQ_TIMER:    
         /* LAB1 YOUR CODE : STEP 3 */
         /* handle the timer interrupt */
         /* (1) After a timer interrupt, you should record this event using a global variable (increase it), such as ticks in kern/driver/clock.c
@@ -204,20 +211,24 @@ trap_dispatch(struct trapframe *tf) {
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
         if (tf->tf_cs != USER_CS) {
+            // 内核态切换到用户态；
+            // 建立了中断帧；
             switchk2u = *tf;
-            switchk2u.tf_cs = USER_CS;
-            switchk2u.tf_ds = switchk2u.tf_es = switchk2u.tf_ss = USER_DS;
-            switchk2u.tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8;
+            switchk2u.tf_cs = USER_CS;                                      // USER_CS 为用户态的段；
+            switchk2u.tf_ds = switchk2u.tf_es = switchk2u.tf_ss = USER_DS;  
+            switchk2u.tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8; // tf_esp 为用户态栈的指针；
 		
             // set eflags, make sure ucore can use io under user mode.
             // if CPL > IOPL, then cpu will generate a general protection.
             
             // 但这样不能正常输出文本；
             // 根据提示，在 trap_dispatch 中转 User 态时，将调用 io 所需权限降低；
+            // 使得用户态程序能够进行 IO 操作；
             switchk2u.tf_eflags |= FL_IOPL_MASK;
 		
             // set temporary stack
             // then iret will jump to the right stack
+            // 设置对应好的用户栈信息，是一个临时的栈；
             *((uint32_t *)tf - 1) = (uint32_t)&switchk2u;
         }
         break;

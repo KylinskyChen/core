@@ -8,6 +8,7 @@
 
 # 定义常量；
 .set PROT_MODE_CSEG,        0x8                     # 内核代码段选择器；
+                                                    # 段的描述子；
 .set PROT_MODE_DSEG,        0x10                    # 内核数据段选择器；
 .set CR0_PE_ON,             0x1                     # 保护模式使能标识；
 
@@ -80,6 +81,7 @@ seta20.2:
     # cr0：32 位控制寄存器；
 
     lgdt gdtdesc                                    # 通过 lgdt 指令把表的地址和大小装入 GDTR 寄存器；
+
     movl %cr0, %eax                                 # 获取 CR0 寄存器中的数值；
     orl $CR0_PE_ON, %eax                            # 0 位是保护允许位 PE (Protedted Enable)，置 1 来启动保护模式；
     movl %eax, %cr0                                 # 将累加器的值赋给 cr0；
@@ -100,7 +102,7 @@ seta20.2:
     ljmp $PROT_MODE_CSEG, $protcseg                 # 跳转到程序段 protcseg；
 
 .code32                                             # 汇编 32 位模式；
-protcseg:
+protcseg:                                           # 32 位段地址；
     # 关注点 4：
     # 设置保护模式的数据段寄存器并跳转到主程序；
     # 
@@ -111,13 +113,15 @@ protcseg:
     # SS：堆栈段 (Stack Segment)；
     # FS：附加段；
     # GS：附加段；
-
+                                                    # 前面有一个空段，一个 code 段，所以数据段为 16；
     movw $PROT_MODE_DSEG, %ax                       # 数据段选择器；
     movw %ax, %ds                                   # -> DS：数据段 (Data Segment)；
     movw %ax, %es                                   # -> ES：附加数据段 (Extra Segment)；
     movw %ax, %fs                                   # -> FS：附加段；
     movw %ax, %gs                                   # -> GS：附加段；
     movw %ax, %ss                                   # -> SS：堆栈段 (Stack Segment)；
+
+    # 到这里，地址空间就设置好了；
 
     # 设置堆栈指针并调用 C 中的程序，堆栈区域从 0 到 start (0x7C00)；
     #
@@ -130,9 +134,10 @@ protcseg:
     # eip
     #       寄存器存放下一个 CPU 指令存放的内存地址；
     #       当 CPU 执行完当前的指令后，从 eip 寄存器中读取下一条指令的内存地址，然后继续执行。
-
-    movl $0x0, %ebp                                 # 清空当前线程栈底指针；
-    movl $start, %esp                               # 将 start 放到栈顶；
+    
+                                                    # 堆栈是向低地址生长的；
+    movl $0x0, %ebp                                 # 清空当前线程栈底指针，设置函数调用栈链式最开始的地方为 0；
+    movl $start, %esp                               # 将 start 放到栈顶，设置栈的堆栈的空间大小；
     call bootmain                                   # 调用 bootmain 函数；
 
     # bootmain 返回的地方，实际上不会执行到这里，若执行到此处则循环；
@@ -143,8 +148,11 @@ spin:
 .p2align 2                                          # 强制 4 字节对齐；
 gdt:                                                # #标识符，表示地址；
     SEG_NULLASM                                     # 第一段永远为 0，不用；
-    SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel
-    SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
+                                                    # 创建两个 4G 空间的段；
+    SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # bootloader 和 kernel 的代码段；
+                                                    # 代码段是可执行、可读；
+    SEG_ASM(STA_W, 0x0, 0xffffffff)                 # bootloader 和 kernel 数据段；
+                                                    # 数据段为可写；
 
 gdtdesc:                                            # GDTR 寄存器，用 lgdt 加载；
     .word 0x17                                      # sizeof(gdt) - 1
