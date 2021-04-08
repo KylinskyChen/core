@@ -11,7 +11,7 @@
 #define FL_IF            0x00000200    // Interrupt Flag
 #define FL_DF            0x00000400    // Direction Flag
 #define FL_OF            0x00000800    // Overflow Flag
-#define FL_IOPL_MASK    0x00003000    // I/O Privilege Level bitmask
+#define FL_IOPL_MASK     0x00003000    // I/O Privilege Level bitmask
 #define FL_IOPL_0        0x00000000    //   IOPL == 0
 #define FL_IOPL_1        0x00001000    //   IOPL == 1
 #define FL_IOPL_2        0x00002000    //   IOPL == 2
@@ -20,8 +20,8 @@
 #define FL_RF            0x00010000    // Resume Flag
 #define FL_VM            0x00020000    // Virtual 8086 mode
 #define FL_AC            0x00040000    // Alignment Check
-#define FL_VIF            0x00080000    // Virtual Interrupt Flag
-#define FL_VIP            0x00100000    // Virtual Interrupt Pending
+#define FL_VIF           0x00080000    // Virtual Interrupt Flag
+#define FL_VIP           0x00100000    // Virtual Interrupt Pending
 #define FL_ID            0x00200000    // ID flag
 
 /* Application segment type bits */
@@ -34,10 +34,10 @@
 
 /* System segment type bits */
 #define STS_T16A        0x1            // Available 16-bit TSS
-#define STS_LDT            0x2            // Local Descriptor Table
+#define STS_LDT         0x2            // Local Descriptor Table
 #define STS_T16B        0x3            // Busy 16-bit TSS
 #define STS_CG16        0x4            // 16-bit Call Gate
-#define STS_TG            0x5            // Task Gate / Coum Transmitions
+#define STS_TG          0x5            // Task Gate / Coum Transmitions
 #define STS_IG16        0x6            // 16-bit Interrupt Gate
 #define STS_TG16        0x7            // 16-bit Trap Gate
 #define STS_T32A        0x9            // Available 32-bit TSS
@@ -49,15 +49,15 @@
 /* Gate descriptors for interrupts and traps */
 // 中断描述符的具体定义；
 struct gatedesc {
-    unsigned gd_off_15_0 : 16;        // low 16 bits of offset in segment
+    unsigned gd_off_15_0 : 16;      // low 16 bits of offset in segment
     unsigned gd_ss : 16;            // segment selector
-    unsigned gd_args : 5;            // # args, 0 for interrupt/trap gates
-    unsigned gd_rsv1 : 3;            // reserved(should be zero I guess)
-    unsigned gd_type : 4;            // type(STS_{TG,IG32,TG32})
-    unsigned gd_s : 1;                // must be 0 (system)
+    unsigned gd_args : 5;           // # args, 0 for interrupt/trap gates
+    unsigned gd_rsv1 : 3;           // reserved(should be zero I guess)
+    unsigned gd_type : 4;           // type(STS_{TG,IG32,TG32})
+    unsigned gd_s : 1;              // must be 0 (system)
     unsigned gd_dpl : 2;            // descriptor(meaning new) privilege level
-    unsigned gd_p : 1;                // Present
-    unsigned gd_off_31_16 : 16;        // high bits of offset in segment
+    unsigned gd_p : 1;              // Present
+    unsigned gd_off_31_16 : 16;     // high bits of offset in segment
 };
 
 /* *
@@ -135,10 +135,19 @@ struct segdesc {
     }
 
 /* task state segment format (as described by the Pentium architecture book) */
+
+// 任务状态段的格式；（和 Pentium 奔腾架构说明书中描述的一致；）
+
 struct taskstate {
-    uint32_t ts_link;        // old ts selector
-    uintptr_t ts_esp0;        // stack pointers and segment selectors
+    uint32_t ts_link;       // old ts selector
+                            // 旧的任务选择子；
+
+    uintptr_t ts_esp0;      // stack pointers and segment selectors
+                            // 栈指针和段选择子；
     uint16_t ts_ss0;        // after an increase in privilege level
+                            // 在提高特权级别之后；
+
+                            // 当一个中断发生在保护模式下，x86 CPU 将在 TSS 中查找 SS0 和 ESP0，并分别将它们的值加载到 SS 和 ESP 中；
     uint16_t ts_padding1;
     uintptr_t ts_esp1;
     uint16_t ts_ss1;
@@ -146,10 +155,13 @@ struct taskstate {
     uintptr_t ts_esp2;
     uint16_t ts_ss2;
     uint16_t ts_padding3;
-    uintptr_t ts_cr3;        // page directory base
-    uintptr_t ts_eip;        // saved state from last task switch
+    uintptr_t ts_cr3;       // page directory base
+                            // 页目录基地址寄存器；
+    uintptr_t ts_eip;       // saved state from last task switch
+                            // 从上一个任务转换中保存下来的状态；
     uint32_t ts_eflags;
     uint32_t ts_eax;        // more saved state (registers)
+                            // 其他被保存的状态；
     uint32_t ts_ecx;
     uint32_t ts_edx;
     uint32_t ts_ebx;
@@ -157,7 +169,8 @@ struct taskstate {
     uintptr_t ts_ebp;
     uint32_t ts_esi;
     uint32_t ts_edi;
-    uint16_t ts_es;            // even more saved state (segment selectors)
+    uint16_t ts_es;         // even more saved state (segment selectors)
+                            // 更进一步的状态保存（段选择子）；
     uint16_t ts_padding4;
     uint16_t ts_cs;
     uint16_t ts_padding5;
@@ -171,8 +184,10 @@ struct taskstate {
     uint16_t ts_padding9;
     uint16_t ts_ldt;
     uint16_t ts_padding10;
-    uint16_t ts_t;            // trap on task switch
-    uint16_t ts_iomb;        // i/o map base address
+    uint16_t ts_t;          // trap on task switch
+                            // 任务开关的中断；
+    uint16_t ts_iomb;       // i/o map base address
+                            // IO 映射的基地址；
 };
 
 #endif /* !__KERN_MM_MMU_H__ */

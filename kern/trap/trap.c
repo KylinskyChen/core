@@ -255,14 +255,26 @@ trap_dispatch(struct trapframe *tf) {
     }
 }
 
+// 中断向量表在 vectors.S 中，所有中断发生都会调用 trap 函数；
+
 /* *
  * trap - handles or dispatches an exception/interrupt. if and when trap() returns,
  * the code in kern/trap/trapentry.S restores the old CPU state saved in the
  * trapframe and then uses the iret instruction to return from the exception.
+ * 
+ * 处理或分派异常或中断；
+ * 
+ * 当 trap() 返回时，kern/trap/trapentry.S 中的代码恢复之前存储在 trapframe 中的 CPU 状态；
+ * 接着使用 iret 指令从异常中返回；
+ * 
  * */
 void
 trap(struct trapframe *tf) {
     // dispatch based on what type of trap occurred
+
+    // 根据发生的中断类型进行中断的分发；
+    // 根据不同的中断号做不同的处理；
+    // 应用程序运行的时候一般不会自己停止，操作系统想夺回 CPU 的控制权必须靠中断；
     trap_dispatch(tf);
 }
 

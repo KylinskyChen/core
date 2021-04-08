@@ -25,9 +25,14 @@ static inline void outw(uint16_t port, uint16_t data) __attribute__((always_inli
 static inline uint32_t read_ebp(void) __attribute__((always_inline));
 
 /* Pseudo-descriptors used for LGDT, LLDT(not used) and LIDT instructions. */
+
+// 伪描述符用于 LGDT、LLDT（未使用）和 LIDT 指令；
+
 struct pseudodesc {
-    uint16_t pd_lim;        // Limit
-    uint32_t pd_base;        // Base address
+    uint16_t pd_lim;            // Limit
+                                // 限制；
+    uint32_t pd_base;           // Base address
+                                // 基地址；
 } __attribute__ ((packed));
 
 static inline void lidt(struct pseudodesc *pd) __attribute__((always_inline));

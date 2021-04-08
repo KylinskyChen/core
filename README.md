@@ -16,6 +16,8 @@
 
 # 二、环境
 
+[uCore操作系统学习笔记](https://fivecakes.com/p/604606d1020188957c773348)
+
 在百度网盘上下载 [mooc-os-2015.vdi.xz](https://pan.baidu.com/s/11zjRK) 虚拟机，是一个 ubuntu 的环境，各项环境已经配置好，该操作系统在此环境上的 qemu 可以成功运行。
 
 ## 2.1 启动 qemu
@@ -574,9 +576,13 @@ gcc -g -Wall -O2 obj/sign/tools/sign.o -o bin/sign
 
 + ld bin/bootblock
 ld -m    elf_i386 -nostdlib -N -e start -Ttext 0x7C00 obj/boot/bootasm.o obj/boot/bootmain.o -o obj/bootblock.o
+# 查看 elf 文件信息；
 objdump -S obj/bootblock.o > obj/bootblock.asm
+
+# 去掉 elf 文件中的 elf header 和 section；
 objcopy -S -O binary obj/bootblock.o obj/bootblock.out
 
+# 用 bin/sign 保证主引导扇区程序长度为 512 字节，且最后两个字节为 55AA；
 bin/sign obj/bootblock.out bin/bootblock
 
 'obj/bootblock.out' size: 488 bytes
