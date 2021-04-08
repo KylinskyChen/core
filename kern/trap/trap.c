@@ -166,19 +166,23 @@ print_regs(struct pushregs *regs) {
 struct trapframe switchk2u, *switchu2k;
 
 /* trap_dispatch - dispatch based on what type of trap occurred */
+
+// 中断派发；
+// 根据不同的中断类型分别进行处理；
+
 static void
 trap_dispatch(struct trapframe *tf) {
 
 // 将 iret 时会从堆栈弹出的段寄存器进行修改；
 // 
-// 	对TO User
+// 	对 TO User
 // 
 // 	    tf->tf_cs = USER_CS;
 // 	    tf->tf_ds = USER_DS;
 // 	    tf->tf_es = USER_DS;
 // 	    tf->tf_ss = USER_DS;
 // 
-// 	对TO Kernel
+// 	对 TO Kernel
 // 
 // 	    tf->tf_cs = KERNEL_CS;
 // 	    tf->tf_ds = KERNEL_DS;
@@ -201,6 +205,7 @@ trap_dispatch(struct trapframe *tf) {
         }
         break;
     case IRQ_OFFSET + IRQ_COM1:
+    // 产生 com1 口的串口中断；
         c = cons_getc();
         cprintf("serial [%03d] %c\n", c, c);
         break;
@@ -209,9 +214,9 @@ trap_dispatch(struct trapframe *tf) {
         cprintf("kbd [%03d] %c\n", c, c);
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
+    // 内核态切换到用户态的中断；
     case T_SWITCH_TOU:
         if (tf->tf_cs != USER_CS) {
-            // 内核态切换到用户态；
             // 建立了中断帧；
             switchk2u = *tf;
             switchk2u.tf_cs = USER_CS;                                      // USER_CS 为用户态的段；
@@ -232,6 +237,7 @@ trap_dispatch(struct trapframe *tf) {
             *((uint32_t *)tf - 1) = (uint32_t)&switchk2u;
         }
         break;
+    // 用户态切换到内核态的中断；
     case T_SWITCH_TOK:
         if (tf->tf_cs != KERNEL_CS) {
             tf->tf_cs = KERNEL_CS;
