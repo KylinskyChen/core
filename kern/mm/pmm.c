@@ -17,33 +17,33 @@
  *   - load the TR register with a segment selector for that segment
  *
  * TSS 可以驻留在内存的任何地方；
- * 
+ *
  * 特殊的任务寄存被称为 TR，拥有 1 个段选择子，指向 1 个有效的 TSS 段描述符，存储在全局描述符表 GDT 中；
- * 
+ *
  * 因此，为了使用 TSS，gdt_init 中以下的操作是十分必要的：
  *  - 在 GDT 中创建 1 个 TSS 描述符的入口；
  *  - 在内存中的 TSS 中增加 TSS 必要的信息；
  *  - 使用该段的段选择器加载 TR 寄存器；
- * 
+ *
  * There are several fileds in TSS for specifying the new stack pointer when a
  * privilege level change happens. But only the fields SS0 and ESP0 are useful
  * in our os kernel.
  *
  * TSS 中有几个字段，用于在发生特权级别更改时指定新的堆栈指针；
  * 但是在我们的操作系统内核中，只有 SS0 和 ESP0 字段是有用的；
- * 
+ *
  * The field SS0 contains the stack segment selector for CPL = 0, and the ESP0
  * contains the new ESP value for CPL = 0. When an interrupt happens in protected
  * mode, the x86 CPU will look in the TSS for SS0 and ESP0 and load their value
  * into SS and ESP respectively.
- * 
+ *
  * 当一个中断发生在保护模式下，x86 CPU 将在 TSS 中查找 SS0 和 ESP0，并分别将它们的值加载到 SS 和 ESP 中。
  * */
 static struct taskstate ts = {0};
 
 /* *
  * Global Descriptor Table:
- * 
+ *
  * 全局描述符表：GDT；
  *
  * The kernel and user segments are identical (except for the DPL). To load
@@ -55,11 +55,11 @@ static struct taskstate ts = {0};
  *   - 0x18:  user code segment
  *   - 0x20:  user data segment
  *   - 0x28:  defined for tss, initialized in gdt_init
- * 
+ *
  * 内核段和用户段是完全相同的（除了 DPL）；（问题：DPL 是个啥？）
- * 
+ *
  * 为了加载 %ss 寄存器，CPL 必须等于 DPL；（问题：CPL 又是个啥？）
- * 
+ *
  * 因此，我们必须为用户态和内核态拷贝段，定义如下；
  *   - 0x0 :  不使用（总是错误，用于捕获空指针；）
  *   - 0x8 :  内核代码段；
@@ -77,7 +77,7 @@ static struct segdesc gdt[] = {
     SEG_NULL,
     [SEG_KTEXT] = SEG(STA_X | STA_R,    0x0, 0xFFFFFFFF, DPL_KERNEL ),
     [SEG_KDATA] = SEG(STA_W,            0x0, 0xFFFFFFFF, DPL_KERNEL ),
-    [SEG_UTEXT] = SEG(STA_X | STA_R,    0x0, 0xFFFFFFFF, DPL_USER   ),    
+    [SEG_UTEXT] = SEG(STA_X | STA_R,    0x0, 0xFFFFFFFF, DPL_USER   ),
     [SEG_UDATA] = SEG(STA_W,            0x0, 0xFFFFFFFF, DPL_USER   ),
     [SEG_TSS]   = SEG_NULL,
 };
@@ -106,9 +106,9 @@ static struct pseudodesc gdt_pd = {
 /* *
  * lgdt - load the global descriptor table register and reset the
  * data/code segement registers for kernel.
- * 
+ *
  * lgdt：加载全局描述符寄存器，同时，为内核复位数据、代码段寄存器；
- *      
+ *
  * */
 static inline void
 lgdt(struct pseudodesc *pd) {
@@ -141,11 +141,11 @@ gdt_init(void) {
     // Setup a TSS so that we can get the right stack when we trap from
     // user to the kernel. But not safe here, it's only a temporary value,
     // it will be set to KSTACKTOP in lab2.
-	
-	// TSS：task status sgement：任务状态段；
+
+    // TSS：task status sgement：任务状态段；
     // 当我们从用户态跳到内核态时，通过任务状态段的帮助，可以获得正确的堆栈；
     // 此时的基本实现是不安全的，只是一个暂时的值，在 LB2 中我们将它设置到栈顶 STACKTOP；
-	
+
     // 设定好 ts 之后，从用户态返回内核态时，内核态的堆栈信息保存在 ts 中；
 
     // ts.ts_esp0、ts.ts_ss0 完成响应的处理；
@@ -167,6 +167,18 @@ gdt_init(void) {
     // 加载 tss 的信息；
     ltr(GD_TSS);
 }
+
+/*
+ * 函数功能：初始化内存管理；
+ */
+static void
+init_pmm_manager(void) {
+    pmm_manager = &default_pmm_manager;
+    cprintf("memory management: %s\n", pmm_manager->name);
+    pmm_manager->init();
+}
+
+
 
 /*
  * 函数功能：初始化终端设备；

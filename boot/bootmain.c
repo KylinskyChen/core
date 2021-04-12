@@ -6,7 +6,7 @@
  * 这是一个非常简单的引导加载程序，它的唯一工作是从第一个 IDE 硬盘引导 ELF 内核映像；
  *
  * 磁盘布局
- * 
+ *
  *  * 这个程序 (bootasm.S and bootmain.c) 是一个 bootloader 引导程序；
  *    它应该存储在磁盘的第一个扇区中；
  *
@@ -15,11 +15,11 @@
  *  * 内核映像必须是 ELF 格式；
  *
  * 启动步骤：
- * 
+ *
  *  1. 当 CPU 上电时，将 BIOS 加载到内存中并执行它；
- * 
+ *
  *  2. BIOS 初始化设备、中断向量表，读取引导设备的第一个扇区到内存并跳转执行；
- * 
+ *
  *  3. 如果当前的 bootloader 被存储在硬盘驱动器的第一个扇区，这段代码开始接管 CPU；
  *
  *  4. bootasm.S 控制 CPU 启动，设置保护模式和栈，接着运行 C 代码，调用 bootmain()；
@@ -63,7 +63,7 @@ readsect(void *dst, uint32_t secno) {
     insl(0x1F0, dst, SECTSIZE / 4);
 }
 
-/* 
+/*
  * 函数功能：从内核的虚拟地址 va 偏移 offset 的位置读取 count 个字节；
  * 备   注：可能复制读取的数据比请求的数据要多；
  */
@@ -85,7 +85,7 @@ readseg(uintptr_t va, uint32_t count, uint32_t offset) {
     }
 }
 
-/* 
+/*
  * 函数功能：bootloader 的入口；
  */
 void
