@@ -3,19 +3,19 @@
 
 #include <defs.h>
 
-#define do_div(n, base) ({                                      \
+#define do_div(n, base) ({                                        \
     unsigned long __upper, __low, __high, __mod, __base;        \
     __base = (base);                                            \
     asm("" : "=a" (__low), "=d" (__high) : "A" (n));            \
-    __upper = __high;                                           \
-    if (__high != 0) {                                          \
-        __upper = __high % __base;                              \
-        __high = __high / __base;                               \
-    }                                                           \
-    asm("divl %2" : "=a" (__low), "=d" (__mod)                  \
-        : "rm" (__base), "0" (__low), "1" (__upper));           \
-    asm("" : "=A" (n) : "a" (__low), "d" (__high));             \
-    __mod;                                                      \
+    __upper = __high;                                            \
+    if (__high != 0) {                                            \
+        __upper = __high % __base;                                \
+        __high = __high / __base;                                \
+    }                                                            \
+    asm("divl %2" : "=a" (__low), "=d" (__mod)                    \
+        : "rm" (__base), "0" (__low), "1" (__upper));            \
+    asm("" : "=A" (n) : "a" (__low), "d" (__high));                \
+    __mod;                                                        \
  })
 
 static inline uint8_t inb(uint16_t port) __attribute__((always_inline));
@@ -24,9 +24,10 @@ static inline void outb(uint16_t port, uint8_t data) __attribute__((always_inlin
 static inline void outw(uint16_t port, uint16_t data) __attribute__((always_inline));
 static inline uint32_t read_ebp(void) __attribute__((always_inline));
 
+/* Pseudo-descriptors used for LGDT, LLDT(not used) and LIDT instructions. */
 struct pseudodesc {
-    uint16_t pd_lim;
-    uint32_t pd_base;
+    uint16_t pd_lim;        // Limit
+    uint32_t pd_base;        // Base address
 } __attribute__ ((packed));
 
 static inline void lidt(struct pseudodesc *pd) __attribute__((always_inline));
@@ -116,7 +117,7 @@ __strcmp(const char *s1, const char *s2) {
     return ret;
 }
 
-#endif
+#endif /* __HAVE_ARCH_STRCMP */
 
 #ifndef __HAVE_ARCH_STRCPY
 #define __HAVE_ARCH_STRCPY
@@ -132,7 +133,7 @@ __strcpy(char *dst, const char *src) {
             : "0" (src), "1" (dst) : "memory");
     return dst;
 }
-#endif
+#endif /* __HAVE_ARCH_STRCPY */
 
 #ifndef __HAVE_ARCH_MEMSET
 #define __HAVE_ARCH_MEMSET
@@ -146,7 +147,7 @@ __memset(void *s, char c, size_t n) {
             : "memory");
     return s;
 }
-#endif
+#endif /* __HAVE_ARCH_MEMSET */
 
 #ifndef __HAVE_ARCH_MEMMOVE
 #define __HAVE_ARCH_MEMMOVE
@@ -165,7 +166,7 @@ __memmove(void *dst, const void *src, size_t n) {
             : "memory");
     return dst;
 }
-#endif
+#endif /* __HAVE_ARCH_MEMMOVE */
 
 #ifndef __HAVE_ARCH_MEMCPY
 #define __HAVE_ARCH_MEMCPY
@@ -184,7 +185,7 @@ __memcpy(void *dst, const void *src, size_t n) {
             : "memory");
     return dst;
 }
-#endif
+#endif /* __HAVE_ARCH_MEMCPY */
 
-#endif
+#endif /* !__LIBS_X86_H__ */
 
